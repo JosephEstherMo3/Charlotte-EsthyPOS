@@ -12,12 +12,17 @@ import { hashPassword } from "@/lib/password";
 
 async function main() {
   const args = process.argv.slice(2);
-  const newEmail = args[0]?.trim();
-  const newPassword = args[1]?.trim();
+  const newEmail = args[0]?.trim().toLowerCase();
+  const newPassword = args[1];
   const newName = args[2]?.trim();
 
   if (!newEmail || !newPassword) {
     console.log("Usage: npx tsx scripts/update-owner.ts <new-email> <new-password> [full-name]");
+    process.exitCode = 1;
+    return;
+  }
+  if (newPassword.length > 128) {
+    console.error("Password must be at most 128 characters.");
     process.exitCode = 1;
     return;
   }
@@ -55,7 +60,6 @@ async function main() {
   console.log(`\n Account updated successfully!`);
   console.log(`Email:    ${newEmail}`);
   console.log(`Name:     ${newName || targetUser.fullName}`);
-  console.log(`Password: ${newPassword}`);
   console.log(`\nYou can now sign in at http://localhost:3000/login with your credentials.\n`);
 }
 
@@ -65,4 +69,3 @@ main()
     process.exitCode = 1;
   })
   .finally(() => pool.end());
-

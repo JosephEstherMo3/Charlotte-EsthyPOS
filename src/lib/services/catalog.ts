@@ -4,7 +4,7 @@ import { categories } from "@/db/schema";
 import { addDays, todayInTz } from "@/lib/money";
 import { HttpError } from "@/lib/errors";
 
-type Reader = Pick<typeof db, "select" | "insert">;
+type Reader = Pick<typeof db, "select" | "insert" | "execute">;
 
 /** Finds (case-insensitively) or creates a category. undefined = leave unchanged, null/"" = clear. */
 export async function resolveCategoryId(
@@ -13,17 +13,23 @@ export async function resolveCategoryId(
   name: string | null | undefined,
 ): Promise<string | null | undefined> {
   if (name === undefined) return undefined;
-  if (!name) return null;
+  if (name === null) return null;
+  const normalizedName = name.trim().replace(/\s+/g, " ");
+  if (!normalizedName) return null;
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${businessId + ":" + normalizedName.toLowerCase()}, 0))`);
   const find = async () => {
     const [row] = await tx
       .select({ id: categories.id })
       .from(categories)
-      .where(and(eq(categories.businessId, businessId), sql`lower(${categories.name}) = lower(${name})`));
+      .where(and(
+        eq(categories.businessId, businessId),
+        sql`lower(regexp_replace(btrim(${categories.name}), '[[:space:]]+', ' ', 'g')) = lower(${normalizedName})`,
+      ));
     return row?.id;
   };
   const existing = await find();
   if (existing) return existing;
-  const [created] = await tx.insert(categories).values({ businessId, name }).onConflictDoNothing().returning({ id: categories.id });
+  const [created] = await tx.insert(categories).values({ businessId, name: normalizedName }).onConflictDoNothing().returning({ id: categories.id });
   return created?.id ?? (await find()) ?? null;
 }
 

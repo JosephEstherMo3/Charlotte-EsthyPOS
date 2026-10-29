@@ -1,7 +1,7 @@
 import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { categories, inventoryMovements, products } from "@/db/schema";
+import { categories, inventoryMovements, productCreationRequests, products } from "@/db/schema";
 import { parseQuery, readJson, route } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { can } from "@/lib/permissions";
@@ -17,6 +17,7 @@ export const GET = route({ permission: "products.view" }, async ({ url, auth }) 
       categoryId: uuidField.optional(),
       status: z.enum(["active", "archived", "all"]).default("active"),
       lowStock: z.enum(["1"]).optional(),
+      stockStatus: z.enum(["low", "out"]).optional(),
     }),
   );
   const biz = auth.business.id;
@@ -26,6 +27,8 @@ export const GET = route({ permission: "products.view" }, async ({ url, auth }) 
   if (q.status !== "all") conds.push(eq(products.isActive, q.status === "active"));
   if (q.categoryId) conds.push(eq(products.categoryId, q.categoryId));
   if (q.lowStock) conds.push(sql`${products.stockQty} <= ${threshold}`);
+  if (q.stockStatus === "low") conds.push(sql`${products.stockQty} > 0 and ${products.stockQty} <= ${threshold}`);
+  if (q.stockStatus === "out") conds.push(sql`${products.stockQty} <= 0`);
   if (q.q) {
     const like = `%${q.q}%`;
     conds.push(or(ilike(products.name, like), ilike(products.sku, like), ilike(products.barcode, like))!);
@@ -42,6 +45,15 @@ export const GET = route({ permission: "products.view" }, async ({ url, auth }) 
     .where(and(...conds))
     .orderBy(asc(products.name))
     .limit(1000);
+
+  const [summary] = await db
+    .select({
+      activeProducts: sql<number>`count(*)::int`,
+      units: sql<number>`coalesce(sum(greatest(${products.stockQty}, 0)), 0)::int`,
+      lowStock: sql<number>`(count(*) filter (where ${products.stockQty} <= ${threshold}))::int`,
+    })
+    .from(products)
+    .where(and(eq(products.businessId, biz), eq(products.isActive, true)));
 
   const cats = await db
     .select({ id: categories.id, name: categories.name })
@@ -70,6 +82,7 @@ export const GET = route({ permission: "products.view" }, async ({ url, auth }) 
       categoryName,
     })),
     categories: cats,
+    summary,
     valuation,
     settings: {
       defaultLowStockThreshold: auth.settings.defaultLowStockThreshold,
@@ -80,6 +93,7 @@ export const GET = route({ permission: "products.view" }, async ({ url, auth }) 
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Product name is required").max(120),
+  requestKey: z.string().trim().min(1).max(100).optional(),
   sku: optText(64),
   barcode: optText(64),
   categoryName: optText(60),
@@ -95,6 +109,18 @@ export const POST = route({ permission: "products.manage" }, async ({ req, auth 
   const input = await readJson(req, createSchema);
   const biz = auth.business.id;
   const created = await db.transaction(async (tx) => {
+    if (input.requestKey) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${biz + ":" + input.requestKey}, 0))`);
+      const [existing] = await tx
+        .select({ id: productCreationRequests.productId })
+        .from(productCreationRequests)
+        .where(and(
+          eq(productCreationRequests.businessId, biz),
+          eq(productCreationRequests.requestKey, input.requestKey),
+        ));
+      if (existing) return { id: existing.id, duplicate: true };
+    }
+
     const categoryId = await resolveCategoryId(tx, biz, input.categoryName);
     const [p] = await tx
       .insert(products)
@@ -123,8 +149,15 @@ export const POST = route({ permission: "products.manage" }, async ({ req, auth 
         userId: auth.user.id,
       });
     }
+    if (input.requestKey) {
+      await tx.insert(productCreationRequests).values({
+        businessId: biz,
+        requestKey: input.requestKey,
+        productId: p.id,
+      });
+    }
     await audit(tx, { businessId: biz, userId: auth.user.id, action: "product.created", entityType: "product", entityId: p.id, metadata: { name: input.name } });
-    return p;
+    return { id: p.id, duplicate: false };
   });
-  return Response.json({ id: created.id }, { status: 201 });
+  return Response.json({ id: created.id, duplicate: created.duplicate }, { status: created.duplicate ? 200 : 201 });
 });

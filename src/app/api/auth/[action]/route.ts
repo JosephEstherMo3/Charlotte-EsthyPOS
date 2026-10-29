@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -43,7 +43,11 @@ async function login(req: NextRequest) {
   );
   const key = `login:${clientIp(req)}:${input.email}`;
   rateLimit(key, 10, 15 * 60 * 1000);
-  const [u] = await db.select().from(users).where(eq(users.email, input.email));
+  const matchingUsers = await db.select().from(users).where(sql`lower(${users.email}) = ${input.email}`).limit(2);
+  if (matchingUsers.length > 1) {
+    throw new HttpError(409, "More than one account matches this email address. Contact your administrator.");
+  }
+  const [u] = matchingUsers;
   const ok = await verifyPassword(input.password, u?.passwordHash ?? DUMMY_HASH); // constant-ish time
   if (!u || !ok) throw new HttpError(401, "Incorrect email or password.");
   if (!u.emailVerifiedAt) {

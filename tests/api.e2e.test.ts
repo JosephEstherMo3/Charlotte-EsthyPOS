@@ -1,7 +1,7 @@
 import { like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "@/db";
-import { businesses, businessSettings, embeddedSessions, memberships, passwordResets, users } from "@/db/schema";
+import { businesses, businessSettings, embeddedSessions, inventoryMovements, memberships, passwordResets, users } from "@/db/schema";
 import { createEmailVerification } from "@/lib/auth";
 import { hashPassword, hashToken } from "@/lib/password";
 import { eq } from "drizzle-orm";
@@ -105,6 +105,9 @@ describe.skipIf(!BASE)("API authentication, authorization and isolation", () => 
     expect(reg.json.verificationRequired).toBe(false); // no mail provider: address starts verified
     expect(fresh.cookie).toBe(""); // registration must never sign anyone in
     expect((await fresh.req("/api/auth/session")).json).toEqual({ authenticated: false });
+
+    // Older account-update scripts could store email addresses with uppercase letters.
+    await db.update(users).set({ email: email.toUpperCase() }).where(eq(users.email, email));
 
     // Sign in with exactly the credentials used to register.
     const signed = new Client();
@@ -241,11 +244,40 @@ describe.skipIf(!BASE)("API authentication, authorization and isolation", () => 
   });
 
   it("lets an owner create products and see them", async () => {
-    const c = await A.req("/api/products", { body: { name: "Widget", sku: "W-1", price: 10, costPrice: 4, stockQty: 5 } });
+    const widgetInput = { name: "Widget", sku: "W-1", barcode: "000123", categoryName: "Beauty &  Cosmetics", price: 10, costPrice: 4, stockQty: 5, requestKey: `${tag}-widget-create` };
+    const c = await A.req("/api/products", { body: widgetInput });
     expect(c.status).toBe(201);
     productId = c.json.id;
+    const replay = await A.req("/api/products", { body: widgetInput });
+    expect(replay.status).toBe(200);
+    expect(replay.json).toMatchObject({ id: productId, duplicate: true });
     const l = await A.req("/api/products");
     expect(l.json.products.map((p: { id: string }) => p.id)).toContain(productId);
+    expect(l.json.products.find((p: { id: string }) => p.id === productId).barcode).toBe("000123");
+    expect(l.json.summary).toEqual({ activeProducts: 1, units: 5, lowStock: 1 });
+    expect(l.json.valuation).not.toBeNull();
+    const [openingMovement] = await db.select().from(inventoryMovements).where(eq(inventoryMovements.productId, productId));
+    expect(openingMovement).toMatchObject({ type: "initial", quantityChange: 5, balanceAfter: 5 });
+    expect(await db.select().from(inventoryMovements).where(eq(inventoryMovements.productId, productId))).toHaveLength(1);
+
+    const duplicateSku = await A.req("/api/products", { body: { name: "Duplicate SKU", sku: "W-1", price: 10 } });
+    expect(duplicateSku.status).toBe(409);
+    expect(duplicateSku.json.fieldErrors.sku).toBeTruthy();
+    const duplicateBarcode = await A.req("/api/products", { body: { name: "Duplicate barcode", barcode: "000123", price: 10 } });
+    expect(duplicateBarcode.status).toBe(409);
+    expect(duplicateBarcode.json.fieldErrors.barcode).toBeTruthy();
+
+    const outOfStockInput = { name: "Out of stock", categoryName: "beauty & cosmetics", price: 1, stockQty: 0, requestKey: `${tag}-out-of-stock-create` };
+    const outOfStockAttempts = await Promise.all([
+      A.req("/api/products", { body: outOfStockInput }),
+      A.req("/api/products", { body: outOfStockInput }),
+    ]);
+    expect(outOfStockAttempts.map((r) => r.status).sort()).toEqual([200, 201]);
+    expect(outOfStockAttempts[0].json.id).toBe(outOfStockAttempts[1].json.id);
+    const outOfStockId = outOfStockAttempts[0].json.id;
+    const outList = await A.req("/api/products?stockStatus=out");
+    expect(outList.json.products.map((p: { id: string }) => p.id)).toContain(outOfStockId);
+    expect(outList.json.categories.filter((c: { name: string }) => c.name.toLowerCase() === "beauty & cosmetics")).toHaveLength(1);
   });
 
   it("requires a real sign-in on every host, including platform preview domains", async () => {
@@ -333,6 +365,8 @@ describe.skipIf(!BASE)("API authentication, authorization and isolation", () => 
     const prods = await cashier.req("/api/products");
     expect(prods.status).toBe(200);
     expect(prods.json.products[0].costPrice).toBeNull(); // cost prices are hidden from cashiers
+    expect(prods.json.summary).toMatchObject({ activeProducts: 2, units: 5, lowStock: 2 });
+    expect(prods.json.valuation).toBeNull();
   });
 
   it("lets managers work on sales but reserves users and customer records for owners", async () => {

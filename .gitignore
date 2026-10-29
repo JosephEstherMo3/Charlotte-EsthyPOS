@@ -16,3 +16,6 @@ next-env.d.ts
 .DS_Store
 *.tsbuildinfo
 coverage
+
+# Local Netlify folder
+.netlify

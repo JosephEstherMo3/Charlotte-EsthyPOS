@@ -236,6 +236,22 @@ export const products = pgTable(
   ],
 );
 
+export const productCreationRequests = pgTable(
+  "product_creation_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    requestKey: text("request_key").notNull(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("product_creation_requests_business_key_uq").on(t.businessId, t.requestKey)],
+);
+
 export const customers = pgTable(
   "customers",
   {

@@ -58,8 +58,9 @@ tests/               unit, DB integration and HTTP authorisation tests
 * **Receipts** — unique configurable numbering, logo & business details, thank-you message, 58 mm / 80 mm / A4 layouts,
   browser print (print-only layout), PDF download, WhatsApp share link, reprint any receipt, searchable history with
   filters (date, cashier, payment method, status, receipt number).
-* **Products & inventory** — create / edit / archive (never hard-delete), SKU, barcode, category, cost & price,
-  low-stock thresholds, stock adjustments with reasons, movement history, valuation at cost and retail.
+* **Products & inventory** — retry-safe product creation with transactional opening stock, edit / archive (never
+  hard-delete), SKU, barcode, whitespace/case-normalized categories, cost & price, low-stock and out-of-stock filters,
+  product details, stock adjustments with reasons, movement history, valuation at cost and retail.
 * **Customers** — records with purchase history, linked to sales. **Only an owner** can add, edit or delete customer
   records; managers/cashiers may view and select existing customers when selling.
 * **Refunds & cancellations** — partial / full refunds and whole-sale cancellation by managers/owners, optional restock,
@@ -97,7 +98,7 @@ Requirements: Node.js 20+, PostgreSQL 14+.
 ```bash
 npm install
 cp .env.example .env            # then edit DATABASE_URL
-npm run db:push                 # create/update tables (or apply drizzle/0000, 0001 and 0002 SQL in order)
+npm run db:push                 # create/update tables (or apply drizzle/0000 through 0004 SQL in order)
 npm run dev                     # http://localhost:3000
 ```
 

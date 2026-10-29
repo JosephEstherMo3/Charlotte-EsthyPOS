@@ -75,9 +75,16 @@ function errorResponse(err: unknown): Response {
     }
     return NextResponse.json({ error: err.issues[0]?.message ?? "Invalid input", fieldErrors }, { status: 400 });
   }
-  const e = err as { code?: string; cause?: { code?: string } };
+  const e = err as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } };
   const pgCode = e?.cause?.code ?? e?.code;
   if (pgCode === "23505") {
+    const constraint = e.cause?.constraint ?? e.constraint;
+    if (constraint === "products_business_sku_uq") {
+      return NextResponse.json({ error: "That SKU is already in use for this business.", fieldErrors: { sku: "Choose a unique SKU." } }, { status: 409 });
+    }
+    if (constraint === "products_business_barcode_uq") {
+      return NextResponse.json({ error: "That barcode is already in use for this business.", fieldErrors: { barcode: "Choose a unique barcode." } }, { status: 409 });
+    }
     return NextResponse.json({ error: "That value already exists. Please use a different one." }, { status: 409 });
   }
   if (pgCode === "23503") {

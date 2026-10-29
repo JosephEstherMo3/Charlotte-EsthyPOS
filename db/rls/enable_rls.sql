@@ -31,7 +31,7 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'business_settings', 'memberships', 'categories', 'products', 'customers', 'sales',
+    'business_settings', 'memberships', 'categories', 'products', 'product_creation_requests', 'customers', 'sales',
     'sale_items', 'payments', 'inventory_movements', 'refunds', 'audit_events'
   ]
   LOOP

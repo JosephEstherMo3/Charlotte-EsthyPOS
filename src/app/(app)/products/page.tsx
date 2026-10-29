@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { Archive, ArchiveRestore, ImagePlus, Package, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Eye, ImagePlus, Package, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-context";
+import { fromCents, toCents } from "@/lib/money";
 import {
   Alert,
   Badge,
@@ -25,7 +26,7 @@ import {
   TextField,
   useToast,
 } from "@/components/ui";
-import { ApiError, apiFetch, fileToResizedDataUrl, qs, useApi, useDebounced } from "@/lib/client";
+import { ApiError, apiFetch, fileToResizedDataUrl, qs, uid, useApi, useDebounced } from "@/lib/client";
 
 interface Prod {
   id: string;
@@ -48,6 +49,7 @@ interface Res {
   products: Prod[];
   categories: { id: string; name: string }[];
   valuation: { products: number; units: number; valueAtCost: number; valueAtRetail: number; lowStock: number } | null;
+  summary: { activeProducts: number; units: number; lowStock: number };
   settings: { defaultLowStockThreshold: number; allowNegativeStock: boolean };
 }
 interface Movement {
@@ -64,8 +66,22 @@ interface Movement {
 
 const EMPTY = { name: "", sku: "", barcode: "", categoryName: "", description: "", price: "", costPrice: "", stockQty: "0", lowStockThreshold: "", imageUrl: "" };
 
+function unitProfit(price: string, cost: string) {
+  const priceCents = toCents(price);
+  const profitCents = priceCents - toCents(cost);
+  return {
+    profit: fromCents(profitCents),
+    margin: priceCents === 0 ? null : `${((profitCents / priceCents) * 100).toFixed(2)}%`,
+  };
+}
+
 function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { product: Prod | null; categories: string[]; canSeeCost: boolean; onClose: () => void; onSaved: () => void }) {
+  const app = useApp();
   const toast = useToast();
+  const formId = `product-form-${product?.id ?? "new"}`;
+  const formRef = useRef<HTMLFormElement>(null);
+  const savingRef = useRef(false);
+  const createRequest = useRef({ signature: "", key: "" });
   const [v, setV] = useState(
     product
       ? { name: product.name, sku: product.sku ?? "", barcode: product.barcode ?? "", categoryName: product.categoryName ?? "", description: product.description ?? "", price: product.price, costPrice: product.costPrice ?? "", stockQty: String(product.stockQty), lowStockThreshold: product.lowStockThreshold === null ? "" : String(product.lowStockThreshold), imageUrl: product.imageUrl ?? "" }
@@ -79,7 +95,7 @@ function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { pr
   async function pickImage(file?: File) {
     if (!file) return;
     try {
-      setV((p) => ({ ...p, imageUrl: "" }));
+      setErr("");
       const url = await fileToResizedDataUrl(file, 320, "image/jpeg", 0.75);
       setV((p) => ({ ...p, imageUrl: url }));
     } catch (e) {
@@ -87,7 +103,26 @@ function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { pr
     }
   }
 
-  async function save() {
+  async function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (savingRef.current) return;
+    const errors: Record<string, string> = {};
+    if (!v.name.trim()) errors.name = "Product name is required.";
+    const price = Number(v.price);
+    if (!v.price.trim()) errors.price = "Selling price is required.";
+    else if (!Number.isFinite(price) || price < 0) errors.price = "Enter a valid nonnegative price.";
+    const stock = Number(v.stockQty);
+    if (!product && (!Number.isInteger(stock) || stock < 0)) errors.stockQty = "Opening stock must be a nonnegative whole number.";
+    if (v.lowStockThreshold.trim() && (!Number.isInteger(Number(v.lowStockThreshold)) || Number(v.lowStockThreshold) < 0)) {
+      errors.lowStockThreshold = "Low-stock threshold must be a nonnegative whole number.";
+    }
+    if (Object.keys(errors).length) {
+      setFields(errors);
+      setErr("Please correct the highlighted fields.");
+      formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
+      return;
+    }
+    savingRef.current = true;
     setBusy(true);
     setErr("");
     setFields({});
@@ -104,6 +139,13 @@ function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { pr
     };
     if (canSeeCost) body.costPrice = num(v.costPrice) ?? 0;
     if (!product) body.stockQty = num(v.stockQty) ?? 0;
+    if (!product) {
+      const signature = JSON.stringify(body);
+      if (createRequest.current.signature !== signature) {
+        createRequest.current = { signature, key: uid() };
+      }
+      body.requestKey = createRequest.current.key;
+    }
     try {
       await apiFetch(product ? `/api/products/${product.id}` : "/api/products", { method: product ? "PATCH" : "POST", body });
       toast.success(product ? "Product updated" : "Product created");
@@ -114,6 +156,7 @@ function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { pr
       setErr(ae.message);
       setFields(ae.fieldErrors ?? {});
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   }
@@ -127,28 +170,35 @@ function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { pr
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button onClick={save} loading={busy} disabled={!v.name.trim() || v.price.trim() === ""}>{product ? "Save changes" : "Create product"}</Button>
+          <Button type="submit" form={formId} loading={busy}>{product ? "Save changes" : "Create product"}</Button>
         </>
       }
     >
+      <form id={formId} ref={formRef} onSubmit={save} noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         {err && <div className="sm:col-span-2"><Alert tone="error">{err}</Alert></div>}
-        <TextField className="sm:col-span-2" label="Product name" value={v.name} onChange={set("name")} error={fields.name} required autoFocus />
-        <TextField label="SKU" value={v.sku} onChange={set("sku")} error={fields.sku} hint="Unique stock-keeping code (optional)." />
-        <TextField label="Barcode" value={v.barcode} onChange={set("barcode")} error={fields.barcode} hint="Scan or type (optional)." />
+        <TextField className="sm:col-span-2" label="Product name" name="name" value={v.name} onChange={set("name")} error={fields.name} required autoFocus />
+        <TextField label="SKU" name="sku" value={v.sku} onChange={set("sku")} error={fields.sku} hint="Unique stock-keeping code (optional)." />
+        <TextField label="Barcode" name="barcode" value={v.barcode} onChange={set("barcode")} error={fields.barcode} hint="Scan or type (optional)." />
         <div>
-          <TextField label="Category" value={v.categoryName} onChange={set("categoryName")} error={fields.categoryName} list="category-options" hint="Pick one or type a new category." />
+          <TextField label="Category" name="categoryName" value={v.categoryName} onChange={set("categoryName")} error={fields.categoryName} list="category-options" hint="Pick one or type a new category." />
           <datalist id="category-options">{categories.map((c) => <option key={c} value={c} />)}</datalist>
         </div>
-        <TextField label="Selling price" type="number" min="0" step="0.01" inputMode="decimal" value={v.price} onChange={set("price")} error={fields.price} required />
-        {canSeeCost && <TextField label="Cost price" type="number" min="0" step="0.01" inputMode="decimal" value={v.costPrice} onChange={set("costPrice")} error={fields.costPrice} hint="Used for profit and valuation." />}
+        <TextField label="Selling price" name="price" type="number" min="0" step="0.01" inputMode="decimal" value={v.price} onChange={set("price")} error={fields.price} required />
+        {canSeeCost && <TextField label="Cost price" name="costPrice" type="number" min="0" step="0.01" inputMode="decimal" value={v.costPrice} onChange={set("costPrice")} error={fields.costPrice} hint="Used for profit and valuation." />}
+        {canSeeCost && v.price !== "" && v.costPrice !== "" && Number.isFinite(Number(v.price)) && Number.isFinite(Number(v.costPrice)) && (
+          <p className="self-end pb-2 text-xs text-slate-600">
+            Gross profit per unit: <strong>{app.money(unitProfit(v.price, v.costPrice).profit)}</strong>
+            {" · "}Gross margin: <strong>{unitProfit(v.price, v.costPrice).margin ?? "—"}</strong>
+          </p>
+        )}
         {!product ? (
-          <TextField label="Opening stock" type="number" min="0" step="1" inputMode="numeric" value={v.stockQty} onChange={set("stockQty")} error={fields.stockQty} hint="Recorded as an inventory movement." />
+          <TextField label="Opening stock" name="stockQty" type="number" min="0" step="1" inputMode="numeric" value={v.stockQty} onChange={set("stockQty")} error={fields.stockQty} hint="Recorded as an inventory movement." />
         ) : (
           <TextField label="Current stock" value={String(product.stockQty)} disabled hint="Use “Adjust stock” to change quantities." readOnly />
         )}
-        <TextField label="Low-stock alert at" type="number" min="0" step="1" inputMode="numeric" value={v.lowStockThreshold} onChange={set("lowStockThreshold")} error={fields.lowStockThreshold} hint="Leave empty to use the business default." />
-        <TextAreaField className="sm:col-span-2" label="Description" value={v.description} onChange={set("description")} error={fields.description} maxLength={500} />
+        <TextField label="Low-stock alert at" name="lowStockThreshold" type="number" min="0" step="1" inputMode="numeric" value={v.lowStockThreshold} onChange={set("lowStockThreshold")} error={fields.lowStockThreshold} hint="Leave empty to use the business default." />
+        <TextAreaField className="sm:col-span-2" label="Description" name="description" value={v.description} onChange={set("description")} error={fields.description} maxLength={500} />
         <div className="sm:col-span-2">
           <span className="mb-1.5 block text-sm font-medium text-slate-700">Product image (optional)</span>
           <div className="flex items-center gap-4">
@@ -169,6 +219,37 @@ function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { pr
             </div>
           </div>
         </div>
+      </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ProductDetails({ product, canSeeCost, onClose }: { product: Prod; canSeeCost: boolean; onClose: () => void }) {
+  const app = useApp();
+  const profit = unitProfit(product.price, product.costPrice ?? "0");
+  return (
+    <Modal open onClose={onClose} title={product.name} description={product.isActive ? "Active product" : "Archived product"} size="md"
+      footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      <div className="space-y-5">
+        {product.imageUrl && (
+          <div className="flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={product.imageUrl} alt={product.name} className="max-h-56 max-w-full rounded-xl object-contain" />
+          </div>
+        )}
+        {product.description && <p className="whitespace-pre-wrap text-sm text-slate-600">{product.description}</p>}
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          <div><dt className="text-xs font-medium text-slate-500">SKU</dt><dd className="mt-1 text-sm text-slate-900">{product.sku || "—"}</dd></div>
+          <div><dt className="text-xs font-medium text-slate-500">Barcode</dt><dd className="mt-1 text-sm text-slate-900">{product.barcode || "—"}</dd></div>
+          <div><dt className="text-xs font-medium text-slate-500">Category</dt><dd className="mt-1 text-sm text-slate-900">{product.categoryName || "—"}</dd></div>
+          <div><dt className="text-xs font-medium text-slate-500">Selling price</dt><dd className="mt-1 text-sm text-slate-900">{app.money(product.price)}</dd></div>
+          {canSeeCost && <div><dt className="text-xs font-medium text-slate-500">Cost price</dt><dd className="mt-1 text-sm text-slate-900">{app.money(product.costPrice)}</dd></div>}
+          {canSeeCost && <div><dt className="text-xs font-medium text-slate-500">Gross profit per unit</dt><dd className="mt-1 text-sm text-slate-900">{app.money(profit.profit)}</dd></div>}
+          {canSeeCost && <div><dt className="text-xs font-medium text-slate-500">Gross margin</dt><dd className="mt-1 text-sm text-slate-900">{profit.margin ?? "—"}</dd></div>}
+          <div><dt className="text-xs font-medium text-slate-500">Available stock</dt><dd className="mt-1 text-sm text-slate-900">{product.stockQty}</dd></div>
+          <div><dt className="text-xs font-medium text-slate-500">Low-stock alert</dt><dd className="mt-1 text-sm text-slate-900">{product.effectiveThreshold}</dd></div>
+        </dl>
       </div>
     </Modal>
   );
@@ -281,8 +362,9 @@ function ProductsInner() {
   const [tab, setTab] = useState<"products" | "movements">("products");
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [filter, setFilter] = useState<"active" | "low" | "archived">(initialFilter);
+  const [filter, setFilter] = useState<"active" | "low" | "out" | "archived">(initialFilter);
   const [editing, setEditing] = useState<Prod | "new" | null>(null);
+  const [viewing, setViewing] = useState<Prod | null>(null);
   const [adjusting, setAdjusting] = useState<Prod | null>(null);
   const [archiving, setArchiving] = useState<Prod | null>(null);
   const [busy, setBusy] = useState(false);
@@ -290,7 +372,7 @@ function ProductsInner() {
   const manage = app.can("products.manage");
   const showCost = app.can("cost.view");
 
-  const { data, error, loading, reload } = useApi<Res>(`/api/products${qs({ q: dsearch.trim(), categoryId, status: filter === "archived" ? "archived" : "active", lowStock: filter === "low" ? "1" : undefined })}`);
+  const { data, error, loading, reload } = useApi<Res>(`/api/products${qs({ q: dsearch.trim(), categoryId, status: filter === "archived" ? "archived" : "active", stockStatus: filter === "low" || filter === "out" ? filter : undefined })}`);
   const all = useApi<Res>(tab === "movements" && app.can("inventory.adjust") ? "/api/products?status=all" : null);
   const cats = useMemo(() => data?.categories.map((c) => c.name) ?? [], [data]);
 
@@ -323,12 +405,12 @@ function ProductsInner() {
         <Movements products={all.data?.products ?? []} />
       ) : (
         <>
-          {data?.valuation && (
-            <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard label="Active products" value={data.valuation.products} hint={`${data.valuation.units} units in stock`} icon={<Package className="h-5 w-5" />} />
-              <StatCard label="Stock value (cost)" value={app.money(data.valuation.valueAtCost)} hint="Units × cost price" tone="emerald" />
-              <StatCard label="Stock value (retail)" value={app.money(data.valuation.valueAtRetail)} hint="Units × selling price" tone="emerald" />
-              <StatCard label="Low stock" value={data.valuation.lowStock} hint="At or below alert level" tone={data.valuation.lowStock ? "amber" : "navy"} />
+          {data && (
+            <div className={`mb-5 grid gap-4 sm:grid-cols-2 ${showCost ? "xl:grid-cols-4" : ""}`}>
+              <StatCard label="Active products" value={data.summary.activeProducts} hint={`${data.summary.units} units in stock`} icon={<Package className="h-5 w-5" />} />
+              {showCost && data.valuation && <StatCard label="Stock value (cost)" value={app.money(data.valuation.valueAtCost)} hint="Units × cost price" tone="emerald" />}
+              {showCost && data.valuation && <StatCard label="Stock value (retail)" value={app.money(data.valuation.valueAtRetail)} hint="Units × selling price" tone="emerald" />}
+              <StatCard label="Low stock" value={data.summary.lowStock} hint="At or below alert level" tone={data.summary.lowStock ? "amber" : "navy"} />
             </div>
           )}
           <Card>
@@ -341,6 +423,7 @@ function ProductsInner() {
               <Select aria-label="Status filter" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
                 <option value="active">Active products</option>
                 <option value="low">Low stock only</option>
+                <option value="out">Out of stock</option>
                 <option value="archived">Archived</option>
               </Select>
             </div>
@@ -395,15 +478,16 @@ function ProductsInner() {
                             {p.isActive && p.isLow && <div><Badge tone={p.stockQty <= 0 ? "red" : "amber"}>{p.stockQty <= 0 ? "Out" : "Low"}</Badge></div>}
                           </td>
                           <td className="px-5 py-3">
-                            {manage && (
-                              <div className="flex justify-end gap-1">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => setViewing(p)} aria-label={`View ${p.name}`} title="View details"><Eye className="h-4 w-4" /></Button>
+                              {manage && <>
                                 {p.isActive && app.can("inventory.adjust") && <Button variant="ghost" size="sm" onClick={() => setAdjusting(p)} aria-label={`Adjust stock for ${p.name}`} title="Adjust stock"><SlidersHorizontal className="h-4 w-4" /></Button>}
                                 <Button variant="ghost" size="sm" onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`} title="Edit"><Pencil className="h-4 w-4" /></Button>
                                 <Button variant="ghost" size="sm" onClick={() => setArchiving(p)} aria-label={`${p.isActive ? "Archive" : "Restore"} ${p.name}`} title={p.isActive ? "Archive" : "Restore"}>
                                   {p.isActive ? <Archive className="h-4 w-4" /> : <ArchiveRestore className="h-4 w-4" />}
                                 </Button>
-                              </div>
-                            )}
+                              </>}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -418,6 +502,7 @@ function ProductsInner() {
       )}
 
       {editing && <ProductForm product={editing === "new" ? null : editing} categories={cats} canSeeCost={showCost} onClose={() => setEditing(null)} onSaved={reload} />}
+      {viewing && <ProductDetails product={viewing} canSeeCost={showCost} onClose={() => setViewing(null)} />}
       {adjusting && <AdjustModal product={adjusting} allowNegative={app.settings.allowNegativeStock} onClose={() => setAdjusting(null)} onSaved={reload} />}
       <ConfirmDialog
         open={!!archiving}

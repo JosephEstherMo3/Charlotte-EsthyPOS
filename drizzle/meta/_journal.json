@@ -29,6 +29,13 @@
       "when": 1793039502602,
       "tag": "0003_email_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793257377026,
+      "tag": "0004_product_creation_idempotency",
+      "breakpoints": true
     }
   ]
 }

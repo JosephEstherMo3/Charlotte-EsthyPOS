@@ -9,7 +9,7 @@ async function main() {
 
   console.log('--- USERS ---');
   for (const user of u) {
-    console.log(`Email: ${user.email} | Name: ${user.fullName} | Verified: ${user.emailVerifiedAt ? 'YES' : 'NO'}`);
+    console.log(`ID: ${user.id} | Email: ${user.email} | Name: ${user.fullName} | Verified: ${user.emailVerifiedAt ? 'YES' : 'NO'}`);
   }
 
   console.log('\n--- BUSINESSES ---');
@@ -17,9 +17,10 @@ async function main() {
     console.log(`ID: ${biz.id} | Name: ${biz.name}`);
   }
 
-  console.log('\n--- MEMBERSHIPS ---');
+  console.log('\n--- MEMBERSHIPS (with User Email) ---');
   for (const mem of m) {
-    console.log(`Biz: ${mem.businessId} | User: ${mem.userId} | Role: ${mem.role} | Status: ${mem.status}`);
+    const matchedUser = u.find((x) => x.id === mem.userId);
+    console.log(`Biz: ${mem.businessId} | Email: ${matchedUser?.email ?? 'UNKNOWN'} | Role: ${mem.role} | Status: ${mem.status}`);
   }
 }
 

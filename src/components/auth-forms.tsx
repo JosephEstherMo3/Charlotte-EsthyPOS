@@ -106,7 +106,9 @@ function LoginForm() {
 
   return (
     <form
-      onSubmit={(e) =>
+      action="#"
+      onSubmit={(e) => {
+        e.preventDefault();
         s.run(async () => {
           clearEmbeddedSession();
           const result = await apiFetch<{ session: { token: string; expiresAt: string } }>("/api/auth/login", {
@@ -114,8 +116,8 @@ function LoginForm() {
             body: { email, password },
           });
           s.enter(result.session);
-        }, e)
-      }
+        });
+      }}
       className="space-y-4"
       noValidate
     >

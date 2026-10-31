@@ -27,13 +27,72 @@ import { DUMMY_HASH, hashPassword, hashToken, newToken, verifyPassword } from "@
 import { resetEmailConfiguration, sendResetEmail, sendVerificationEmail } from "@/lib/recovery-email";
 import { emailField, passwordField } from "@/lib/validation";
 
+const registerSchema = z.object({
+  fullName: z.string().trim().min(2, "Enter your full name").max(100),
+  businessName: z.string().trim().min(2, "Enter your store name").max(100),
+  email: emailField,
+  password: passwordField,
+});
+
 /**
- * Registration creates the account and business but does NOT sign anyone in.
- * The owner confirms the address first (when email delivery is configured) and
- * then signs in with the same credentials.
+ * Registration creates the account and business.
+ * When email delivery (EmailJS or Resend) is configured, a single-use verification
+ * token is emailed to the user before they can log in.
  */
-async function register(_req: NextRequest) {
-  throw new HttpError(403, "Registration is for authorized users only.");
+async function register(req: NextRequest) {
+  const input = await readJson(req, registerSchema);
+  rateLimit(`register:${clientIp(req)}`, 5, 15 * 60 * 1000);
+
+  const [exists] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${input.email.toLowerCase()}`);
+  if (exists) {
+    throw new HttpError(409, "An account with this email address already exists. Sign in or reset your password.", {
+      email: "An account with this email address already exists.",
+    });
+  }
+
+  const emailConfig = resetEmailConfiguration();
+  const passwordHash = await hashPassword(input.password);
+
+  const { userId } = await db.transaction(async (tx) => {
+    const [biz] = await tx.insert(businesses).values({ name: input.businessName }).returning({ id: businesses.id });
+    await tx.insert(businessSettings).values({ businessId: biz.id, receiptBusinessName: input.businessName });
+    const [u] = await tx
+      .insert(users)
+      .values({
+        email: input.email.toLowerCase(),
+        fullName: input.fullName,
+        passwordHash,
+        emailVerifiedAt: emailConfig ? null : new Date(),
+      })
+      .returning({ id: users.id });
+    await tx.insert(memberships).values({
+      businessId: biz.id,
+      userId: u.id,
+      role: "owner",
+      status: "active",
+    });
+    return { userId: u.id };
+  });
+
+  if (emailConfig) {
+    const token = await createEmailVerification(userId);
+    const sent = await sendVerificationEmail(emailConfig, input.email, token, input.fullName, input.businessName);
+    if (!sent) {
+      console.error("[register] Email delivery provider failed to send verification email to:", input.email);
+    }
+    return Response.json(
+      { ok: true, verificationRequired: true, email: input.email },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  return Response.json(
+    { ok: true, verificationRequired: false, email: input.email },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 async function login(req: NextRequest) {
@@ -147,6 +206,23 @@ export const POST = publicRoute(async ({ req, params }) => {
     case "verify": {
       const input = await readJson(req, z.object({ token: z.string().trim().regex(/^[A-Za-z0-9_-]{43}$/, "Invalid verification link") }));
       return verifyEmail(input.token);
+    }
+    case "resend-verification": {
+      const input = await readJson(req, z.object({ email: emailField }));
+      const config = resetEmailConfiguration();
+      if (!config) {
+        throw new HttpError(503, "Email delivery is not configured on this server.");
+      }
+      rateLimit(`resend:${clientIp(req)}`, 5, 15 * 60 * 1000);
+      const [u] = await db
+        .select({ id: users.id, email: users.email, fullName: users.fullName, verified: users.emailVerifiedAt })
+        .from(users)
+        .where(sql`lower(${users.email}) = ${input.email.toLowerCase()}`);
+      if (u && !u.verified) {
+        const token = await createEmailVerification(u.id);
+        await sendVerificationEmail(config, u.email, token, u.fullName);
+      }
+      return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
     }
     case "logout":
       await destroySession();

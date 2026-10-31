@@ -144,7 +144,10 @@ function LoginForm() {
         {s.loading ? "Signing in…" : "Sign in"}
       </Button>
       <p className="text-center text-xs text-slate-500">
-        Authorized personnel only. Contact your administrator for access.
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="font-medium text-emerald-700 hover:text-emerald-800">
+          Create an account
+        </Link>
       </p>
     </form>
   );
@@ -189,29 +192,83 @@ function CreatedPanel({
 }
 
 function RegisterForm() {
+  const [fullName, setFullName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [done, setDone] = useState<{ email: string; verificationRequired: boolean } | null>(null);
+  const config = useApi<{ resetEmailConfigured: boolean }>("/api/auth/config");
+  const s = useSubmit();
+
+  if (done) {
+    return (
+      <CreatedPanel
+        email={done.email}
+        verificationRequired={done.verificationRequired}
+        emailConfigured={Boolean(config.data?.resetEmailConfigured)}
+      />
+    );
+  }
+
+  const handleRegister = (e: FormEvent) => {
+    e.preventDefault();
+    s.run(async () => {
+      const res = await apiFetch<{ ok: boolean; verificationRequired: boolean; email: string }>("/api/auth/register", {
+        method: "POST",
+        body: { fullName, businessName, email: email.trim().toLowerCase(), password },
+      });
+      setDone({ email: res.email, verificationRequired: res.verificationRequired });
+    });
+  };
+
   return (
-    <div className="space-y-6 text-center">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-left">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-amber-900">Registration Restricted</h3>
-            <p className="text-sm text-amber-800">
-              This point of sale system is for authorized users only. Public self-registration is disabled.
-            </p>
-            <p className="text-xs text-amber-700 pt-1">
-              If you need access as a cashier or manager, please contact your store owner to have your account added.
-            </p>
-          </div>
-        </div>
-      </div>
-      <Link
-        href="/login"
-        className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-navy-900 px-4 text-sm font-medium text-white transition-colors hover:bg-navy-800"
-      >
-        Return to Sign in
-      </Link>
-    </div>
+    <form onSubmit={handleRegister} className="space-y-4" noValidate>
+      {s.error && <Alert tone="error">{s.error}</Alert>}
+      <TextField
+        label="Full name"
+        type="text"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        error={s.fields.fullName}
+        autoComplete="name"
+        required
+        autoFocus
+      />
+      <TextField
+        label="Store or Boutique name"
+        type="text"
+        value={businessName}
+        onChange={(e) => setBusinessName(e.target.value)}
+        error={s.fields.businessName}
+        required
+      />
+      <TextField
+        label="Email address"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        error={s.fields.email}
+        autoComplete="email"
+        required
+      />
+      <PasswordField
+        label="Password"
+        value={password}
+        onChange={setPassword}
+        error={s.fields.password}
+        autoComplete="new-password"
+        hint="At least 8 characters."
+      />
+      <Button type="submit" size="lg" className="w-full" loading={s.loading}>
+        {s.loading ? "Creating account…" : "Create store account"}
+      </Button>
+      <p className="text-center text-xs text-slate-500">
+        Already have an account?{" "}
+        <Link href="/login" className="font-medium text-emerald-700 hover:text-emerald-800">
+          Sign in
+        </Link>
+      </p>
+    </form>
   );
 }
 
@@ -386,7 +443,7 @@ function ResetForm() {
 
 const COPY: Record<AuthMode, { title: string; subtitle: string }> = {
   login: { title: "Welcome back", subtitle: "Sign in to continue to your point of sale." },
-  register: { title: "Authorized access only", subtitle: "Public self-registration is disabled for this system." },
+  register: { title: "Create your store account", subtitle: "Set up your point of sale in less than a minute." },
   "forgot-password": { title: "Password recovery", subtitle: "Check the available recovery options for your account." },
   "reset-password": { title: "Choose a new password", subtitle: "Pick a strong password you haven't used before." },
   "verify-email": { title: "Verify your email", subtitle: "One quick step to finish creating your account." },

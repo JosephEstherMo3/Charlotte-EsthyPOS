@@ -1,32 +1,125 @@
 import "server-only";
 
+export type EmailConfig =
+  | {
+      provider: "emailjs";
+      serviceId: string;
+      templateId: string;
+      resetTemplateId: string;
+      publicKey: string;
+      privateKey?: string;
+      origin: string;
+    }
+  | {
+      provider: "resend";
+      key: string;
+      from: string;
+      origin: string;
+    };
+
 /**
- * Password reset mail is available only when the provider, verified sender and
- * a trusted application origin have all been configured on the server. Never
- * build a password reset URL from an untrusted request Host header.
+ * Email delivery configuration. Supports EmailJS and Resend.
+ * Builds verification and password reset links pointing to a trusted application origin.
  */
-export function resetEmailConfiguration(): { key: string; from: string; origin: string } | null {
-  const key = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.EMAIL_FROM?.trim();
-  const appUrl = process.env.APP_URL?.trim();
-  if (!key || !from || !appUrl) return null;
+export function resetEmailConfiguration(): EmailConfig | null {
+  const appUrl = process.env.APP_URL?.trim() || "http://localhost:3000";
+  let origin = "http://localhost:3000";
   try {
     const url = new URL(appUrl);
-    if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) return null;
-    if (url.username || url.password || url.pathname !== "/" || url.search || url.hash) return null;
-    return { key, from, origin: url.origin };
+    origin = url.origin;
   } catch {
-    return null;
+    /* fallback to default */
   }
+
+  // 1. Check EmailJS configuration
+  const emailJsServiceId = process.env.EMAILJS_SERVICE_ID?.trim();
+  const emailJsTemplateId = (process.env.EMAILJS_TEMPLATE_ID || process.env.EMAILJS_VERIFICATION_TEMPLATE_ID)?.trim();
+  const emailJsPublicKey = (process.env.EMAILJS_PUBLIC_KEY || process.env.EMAILJS_USER_ID)?.trim();
+  const emailJsPrivateKey = (process.env.EMAILJS_PRIVATE_KEY || process.env.EMAILJS_ACCESS_TOKEN)?.trim();
+  const emailJsResetTemplateId = (process.env.EMAILJS_RESET_TEMPLATE_ID || emailJsTemplateId)?.trim();
+
+  if (emailJsServiceId && emailJsTemplateId && emailJsPublicKey) {
+    return {
+      provider: "emailjs",
+      serviceId: emailJsServiceId,
+      templateId: emailJsTemplateId,
+      resetTemplateId: emailJsResetTemplateId || emailJsTemplateId,
+      publicKey: emailJsPublicKey,
+      privateKey: emailJsPrivateKey || undefined,
+      origin,
+    };
+  }
+
+  // 2. Check Resend configuration
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  const resendFrom = process.env.EMAIL_FROM?.trim();
+  if (resendKey && resendFrom) {
+    return {
+      provider: "resend",
+      key: resendKey,
+      from: resendFrom,
+      origin,
+    };
+  }
+
+  return null;
 }
 
-/** Email-address confirmation link. Same provider and trusted-origin rules as password reset. */
+/**
+ * Send email confirmation link via EmailJS or Resend.
+ */
 export async function sendVerificationEmail(
   config: NonNullable<ReturnType<typeof resetEmailConfiguration>>,
   email: string,
   token: string,
+  fullName?: string,
+  businessName?: string,
 ): Promise<boolean> {
   const link = `${config.origin}/verify-email?token=${encodeURIComponent(token)}`;
+
+  if (config.provider === "emailjs") {
+    try {
+      const payload: Record<string, unknown> = {
+        service_id: config.serviceId,
+        template_id: config.templateId,
+        user_id: config.publicKey,
+        template_params: {
+          to_name: fullName || "Valued User",
+          to_email: email,
+          user_email: email,
+          email,
+          verification_link: link,
+          token,
+          business_name: businessName || "Charlotte Esthy",
+          app_url: config.origin,
+          subject: "Verify your email for Charlotte Esthy",
+        },
+      };
+      if (config.privateKey) {
+        payload.accessToken = config.privateKey;
+      }
+
+      const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("[EmailJS] Verification email failed:", res.status, text);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error("[EmailJS] Network or timeout error sending verification email:", err);
+      return false;
+    }
+  }
+
+  // Resend fallback
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -46,9 +139,57 @@ export async function sendVerificationEmail(
   }
 }
 
-/** Resend's documented POST /emails API. Secrets and reset links stay on the server. */
-export async function sendResetEmail(config: NonNullable<ReturnType<typeof resetEmailConfiguration>>, email: string, token: string): Promise<boolean> {
+/**
+ * Send password reset email via EmailJS or Resend.
+ */
+export async function sendResetEmail(
+  config: NonNullable<ReturnType<typeof resetEmailConfiguration>>,
+  email: string,
+  token: string,
+): Promise<boolean> {
   const link = `${config.origin}/reset-password?token=${encodeURIComponent(token)}`;
+
+  if (config.provider === "emailjs") {
+    try {
+      const payload: Record<string, unknown> = {
+        service_id: config.serviceId,
+        template_id: config.resetTemplateId,
+        user_id: config.publicKey,
+        template_params: {
+          to_email: email,
+          user_email: email,
+          email,
+          reset_link: link,
+          token,
+          app_url: config.origin,
+          subject: "Reset your Charlotte Esthy password",
+        },
+      };
+      if (config.privateKey) {
+        payload.accessToken = config.privateKey;
+      }
+
+      const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("[EmailJS] Reset email failed:", res.status, text);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error("[EmailJS] Error sending reset email:", err);
+      return false;
+    }
+  }
+
+  // Resend fallback
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

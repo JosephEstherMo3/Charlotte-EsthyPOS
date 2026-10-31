@@ -75,8 +75,10 @@ function useSubmit() {
   }
 
   /** Store the fallback credential, then open the dashboard. */
-  function enter(session: { token: string; expiresAt: string }) {
-    setEmbeddedSession(session);
+  function enter(session?: { token: string; expiresAt: string }) {
+    if (session && session.expiresAt) {
+      setEmbeddedSession(session);
+    }
     window.location.href = "/dashboard";
   }
 
@@ -95,7 +97,7 @@ function LoginForm() {
     if (!getEmbeddedToken()) return;
     apiFetch<{ authenticated: boolean }>("/api/auth/session")
       .then(({ authenticated }) => {
-        if (alive && authenticated) s.enter({ token: getEmbeddedToken()!, expiresAt: "" });
+        if (alive && authenticated) s.enter();
       })
       .catch(() => undefined);
     return () => {
@@ -104,20 +106,22 @@ function LoginForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    s.run(async () => {
+      clearEmbeddedSession();
+      const result = await apiFetch<{ session: { token: string; expiresAt: string } }>("/api/auth/login", {
+        method: "POST",
+        body: { email: email.trim().toLowerCase(), password },
+      });
+      s.enter(result.session);
+    });
+  };
+
   return (
     <form
-      action="#"
-      onSubmit={(e) => {
-        e.preventDefault();
-        s.run(async () => {
-          clearEmbeddedSession();
-          const result = await apiFetch<{ session: { token: string; expiresAt: string } }>("/api/auth/login", {
-            method: "POST",
-            body: { email, password },
-          });
-          s.enter(result.session);
-        });
-      }}
+      onSubmit={handleSubmit}
       className="space-y-4"
       noValidate
     >

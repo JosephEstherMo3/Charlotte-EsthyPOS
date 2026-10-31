@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="#141d3d"/><path d="M13 9h15a1 1 0 0 1 1 1v21l-2.83-1.8-2.83 1.8-2.83-1.8-2.83 1.8-2.83-1.8L12 31V10a1 1 0 0 1 1-1z" fill="#fff"/><path d="M15.5 15.5h9" stroke="#141d3d" stroke-width="1.8" stroke-linecap="round"/><path d="M15.5 20h5" stroke="#cbd5e1" stroke-width="1.8" stroke-linecap="round"/><circle cx="26" cy="26" r="6" fill="#10b981"/><path d="M23.2 26l2 2 3.6-3.8" stroke="#fff" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <path d="M12 40C12 47.728 20.954 54 32 54C43.046 54 52 47.728 52 40" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M22 14C22 14 24 16 26 14C28 12 30 14 32 12C34 14 36 12 38 14C40 16 42 14 42 14V42H22V14Z" fill="#ffffff" stroke="#0284c7" stroke-width="2"/>
+  <path d="M42 14L46 18V24L42 22V14Z" fill="#0369a1"/>
+  <text x="32" y="27" font-family="system-ui, sans-serif" font-size="14" font-weight="900" fill="#0f172a" text-anchor="middle" dominant-baseline="central">₦</text>
+  <rect x="25" y="32" width="14" height="2" rx="1" fill="#0284c7"/>
+  <rect x="25" y="36" width="10" height="2" rx="1" fill="#94a3b8"/>
+  <circle cx="44" cy="42" r="10" fill="#0284c7" stroke="#ffffff" stroke-width="2"/>
+  <path d="M39 42L42.5 45.5L49 39" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

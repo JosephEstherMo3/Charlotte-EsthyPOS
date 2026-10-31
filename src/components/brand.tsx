@@ -1,32 +1,70 @@
+import Link from "next/link";
+
 export const ATTRIBUTION = "Created during internship at Hamplus Hub";
 
-/** Original receipt-inspired brand mark: a torn-edge receipt with an emerald confirmation badge. */
-export function BrandMark({ size = 36, className }: { size?: number; className?: string }) {
+/**
+ * Brand mark icon using the official Charlotte Esthy Point of Sale badge.
+ * On dark backgrounds (light=true) the white JPG bg is blended away via mix-blend-mode:screen.
+ */
+export function BrandMark({ size = 36, light = false, className = "" }: { size?: number; light?: boolean; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" className={className} role="img" aria-label="Charlotte Esthy logo">
-      <rect width="40" height="40" rx="10" fill="#141d3d" />
-      <path
-        d="M13 9h15a1 1 0 0 1 1 1v21l-2.83-1.8-2.83 1.8-2.83-1.8-2.83 1.8-2.83-1.8L12 31V10a1 1 0 0 1 1-1z"
-        fill="#fff"
+    <div
+      style={{ width: size, height: size }}
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl ${light ? "" : "bg-white shadow-sm ring-1 ring-slate-200/50"} ${className}`}
+    >
+      <img
+        src="/logo.jpg"
+        alt="Charlotte Esthy Logo"
+        className="h-full w-full object-contain"
+        style={light ? { mixBlendMode: "screen" } : undefined}
       />
-      <path d="M15.5 15.5h9" stroke="#141d3d" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M15.5 20h5" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="26" cy="26" r="6" fill="#10b981" />
-      <path d="M23.2 26l2 2 3.6-3.8" stroke="#fff" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    </div>
   );
 }
 
-export function BrandLogo({ light = false, size = 36 }: { light?: boolean; size?: number }) {
-  return (
-    <div className="flex items-center gap-3">
-      <BrandMark size={size} />
-      <div className="leading-tight">
-        <div className={`text-[17px] font-semibold tracking-tight ${light ? "text-white" : "text-navy-900"}`}>Charlotte Esthy</div>
-        <div className={`text-[11px] uppercase tracking-[0.14em] ${light ? "text-navy-300" : "text-slate-500"}`}>Point of Sale</div>
-      </div>
+/**
+ * Official Charlotte Esthy Point of Sale logo for the sidebar, navbar, and auth screens.
+ * When `light` is true (placed on a dark navy sidebar) the white JPEG background is
+ * blended away using mix-blend-mode:screen so the logo integrates with the sidebar color.
+ */
+export function BrandLogo({
+  light = false,
+  size = 46,
+  className = "",
+  href,
+}: {
+  light?: boolean;
+  size?: number;
+  className?: string;
+  href?: string;
+}) {
+  const content = (
+    <div className={`flex items-center ${className}`}>
+      <img
+        src="/logo.jpg"
+        alt="Charlotte Esthy — Point of Sale"
+        style={{
+          height: size,
+          // On dark backgrounds: screen blend makes white areas transparent,
+          // revealing the dark navy beneath, so the logo pops without a white box.
+          mixBlendMode: light ? "screen" : undefined,
+          // Slight brightness boost on dark bg so colours read clearly
+          filter: light ? "brightness(1.15) saturate(1.1)" : undefined,
+        }}
+        className="w-auto max-w-full object-contain"
+      />
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="inline-flex transition-transform hover:scale-[1.01]">
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="inline-flex">{content}</div>;
 }
 
 export function Attribution({ className = "", light = false }: { className?: string; light?: boolean }) {

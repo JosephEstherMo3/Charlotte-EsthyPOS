@@ -75,7 +75,7 @@ function SidebarBody({ items, onNavigate }: { items: NavItem[]; onNavigate?: () 
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 py-5">
-        <BrandLogo light />
+        <BrandLogo light href="/dashboard" size={48} className="w-full justify-center" />
       </div>
       <div className="mx-4 mb-4 rounded-xl bg-white/5 px-3 py-2.5">
         <p className="text-[11px] uppercase tracking-wider text-navy-300">Business</p>

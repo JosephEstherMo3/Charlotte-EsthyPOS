@@ -3,20 +3,18 @@ import Link from "next/link";
 export const ATTRIBUTION = "Created during internship at Hamplus Hub";
 
 /**
- * Brand mark icon using the official Charlotte Esthy Point of Sale badge.
- * On dark backgrounds (light=true) the white JPG bg is blended away via mix-blend-mode:screen.
+ * Brand mark icon using the official Charlotte Esthy Point of Sale receipt badge.
  */
-export function BrandMark({ size = 36, light = false, className = "" }: { size?: number; light?: boolean; className?: string }) {
+export function BrandMark({ size = 36, className = "" }: { size?: number; className?: string }) {
   return (
     <div
       style={{ width: size, height: size }}
-      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl ${light ? "" : "bg-white shadow-sm ring-1 ring-slate-200/50"} ${className}`}
+      className={`relative inline-flex shrink-0 items-center justify-center ${className}`}
     >
       <img
-        src="/logo.jpg"
+        src="/logo-badge.png"
         alt="Charlotte Esthy Logo"
         className="h-full w-full object-contain"
-        style={light ? { mixBlendMode: "screen" } : undefined}
       />
     </div>
   );
@@ -24,12 +22,15 @@ export function BrandMark({ size = 36, light = false, className = "" }: { size?:
 
 /**
  * Official Charlotte Esthy Point of Sale logo for the sidebar, navbar, and auth screens.
- * When `light` is true (placed on a dark navy sidebar) the white JPEG background is
- * blended away using mix-blend-mode:screen so the logo integrates with the sidebar color.
+ * - When `light` is true (placed on the dark navy sidebar or dark auth background),
+ *   it renders `/logo-light.png` with transparent background, crisp white "Charlotte",
+ *   vibrant royal blue "Esthy", and white "POINT OF SALE".
+ * - When `light` is false (on light/white backgrounds), it renders `/logo.png` with
+ *   dark navy & vibrant blue branding.
  */
 export function BrandLogo({
   light = false,
-  size = 46,
+  size = 54,
   className = "",
   href,
 }: {
@@ -39,18 +40,11 @@ export function BrandLogo({
   href?: string;
 }) {
   const content = (
-    <div className={`flex items-center ${className}`}>
+    <div className={`flex items-center justify-center ${className}`}>
       <img
-        src="/logo.jpg"
+        src={light ? "/logo-light.png" : "/logo.png"}
         alt="Charlotte Esthy — Point of Sale"
-        style={{
-          height: size,
-          // On dark backgrounds: screen blend makes white areas transparent,
-          // revealing the dark navy beneath, so the logo pops without a white box.
-          mixBlendMode: light ? "screen" : undefined,
-          // Slight brightness boost on dark bg so colours read clearly
-          filter: light ? "brightness(1.15) saturate(1.1)" : undefined,
-        }}
+        style={{ height: size }}
         className="w-auto max-w-full object-contain"
       />
     </div>
@@ -58,7 +52,7 @@ export function BrandLogo({
 
   if (href) {
     return (
-      <Link href={href} className="inline-flex transition-transform hover:scale-[1.01]">
+      <Link href={href} className="inline-flex transition-transform hover:scale-[1.02]">
         {content}
       </Link>
     );
@@ -70,9 +64,9 @@ export function BrandLogo({
 export function Attribution({ className = "", light = false }: { className?: string; light?: boolean }) {
   return (
     <p className={`flex items-center justify-center gap-2 text-xs ${light ? "text-navy-300" : "text-slate-500"} ${className}`}>
-      <span aria-hidden className="h-px w-5 bg-emerald-500/70" />
+      <span aria-hidden className="h-px w-5 bg-sky-500/70" />
       <span className="italic">{ATTRIBUTION}</span>
-      <span aria-hidden className="h-px w-5 bg-emerald-500/70" />
+      <span aria-hidden className="h-px w-5 bg-sky-500/70" />
     </p>
   );
 }

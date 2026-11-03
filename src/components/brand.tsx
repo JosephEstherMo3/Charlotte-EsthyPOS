@@ -21,7 +21,38 @@ export function BrandMark({ size = 36, className = "" }: { size?: number; classN
 }
 
 /**
- * Official Charlotte Esthy Point of Sale logo for the sidebar, navbar, and auth screens.
+ * Branded Sidebar Logo matching the Charlotte Esthy POS UI design:
+ * Receipt badge in a gold/amber accented ring, with "Charlotte Esthy POS"
+ * and "Fast • Smart • Reliable" subtitle.
+ */
+export function BrandSidebarLogo({ href = "/dashboard" }: { href?: string }) {
+  return (
+    <Link
+      href={href}
+      className="group flex flex-col items-center text-center transition-transform hover:scale-[1.02]"
+    >
+      <div className="relative mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 p-1.5 shadow-inner ring-1 ring-white/10 group-hover:ring-amber-400/40">
+        <img
+          src="/logo-badge.png"
+          alt="Charlotte Esthy Logo"
+          className="h-full w-full object-contain drop-shadow"
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-lg font-extrabold tracking-tight text-white">Charlotte Esthy</span>
+        <span className="rounded-md bg-amber-400/20 px-1.5 py-0.5 text-xs font-black tracking-wide text-amber-400 ring-1 ring-amber-400/40">
+          POS
+        </span>
+      </div>
+      <p className="mt-0.5 text-[11px] font-medium italic tracking-wider text-navy-200/80">
+        Fast • Smart • Reliable
+      </p>
+    </Link>
+  );
+}
+
+/**
+ * Official Charlotte Esthy Point of Sale logo for horizontal contexts:
  * - When `light` is true (placed on the dark navy sidebar or dark auth background),
  *   it renders `/logo-light.png` with transparent background, crisp white "Charlotte",
  *   vibrant royal blue "Esthy", and white "POINT OF SALE".
@@ -30,7 +61,7 @@ export function BrandMark({ size = 36, className = "" }: { size?: number; classN
  */
 export function BrandLogo({
   light = false,
-  size = 54,
+  size = 48,
   className = "",
   href,
 }: {
@@ -64,9 +95,9 @@ export function BrandLogo({
 export function Attribution({ className = "", light = false }: { className?: string; light?: boolean }) {
   return (
     <p className={`flex items-center justify-center gap-2 text-xs ${light ? "text-navy-300" : "text-slate-500"} ${className}`}>
-      <span aria-hidden className="h-px w-5 bg-sky-500/70" />
+      <span aria-hidden className="h-px w-5 bg-amber-400/70" />
       <span className="italic">{ATTRIBUTION}</span>
-      <span aria-hidden className="h-px w-5 bg-sky-500/70" />
+      <span aria-hidden className="h-px w-5 bg-amber-400/70" />
     </p>
   );
 }

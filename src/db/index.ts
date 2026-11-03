@@ -1,6 +1,44 @@
+import dns from "node:dns";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
+
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {}
+
+// Ensure resilient DNS resolution when local Wi-Fi router DNS intermittently drops external cloud poolers
+const fallbackResolver = new dns.Resolver();
+try {
+  fallbackResolver.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch {}
+
+const originalLookup = dns.lookup.bind(dns);
+// @ts-ignore
+dns.lookup = function (hostname: string, options: any, callback: any) {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  return originalLookup(hostname, options, (err: any, address: any, family: any) => {
+    if (err && (err.code === "ENOTFOUND" || err.code === "EAI_AGAIN")) {
+      fallbackResolver.resolve4(hostname, (fallbackErr, addresses) => {
+        if (!fallbackErr && addresses && addresses.length > 0) {
+          if (options && options.all) {
+            return callback(
+              null,
+              addresses.map((addr) => ({ address: addr, family: 4 }))
+            );
+          }
+          return callback(null, addresses[0], 4);
+        }
+        return callback(err, address, family);
+      });
+      return;
+    }
+    return callback(err, address, family);
+  });
+};
 
 const rawDatabaseUrl = process.env.DATABASE_URL;
 

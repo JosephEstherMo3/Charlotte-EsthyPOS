@@ -21,9 +21,14 @@ export type EmailConfig =
       origin: string;
     };
 
+export interface EmailResult {
+  ok: boolean;
+  error?: string;
+}
+
 /**
  * Email delivery configuration. Supports EmailJS and Resend.
- * Builds verification and password reset links pointing to a trusted application origin.
+ * Builds verification, activation and password reset links pointing to a trusted application origin.
  */
 export function resetEmailConfiguration(): EmailConfig | null {
   const appUrl = process.env.APP_URL?.trim() || "http://localhost:3000";
@@ -78,7 +83,7 @@ export async function sendVerificationEmail(
   token: string,
   fullName?: string,
   businessName?: string,
-): Promise<boolean> {
+): Promise<EmailResult> {
   const link = `${config.origin}/verify-email?token=${encodeURIComponent(token)}`;
 
   if (config.provider === "emailjs") {
@@ -93,10 +98,12 @@ export async function sendVerificationEmail(
           user_email: email,
           email,
           verification_link: link,
+          activation_link: link,
+          link,
           token,
-          business_name: businessName || "Charlotte Esthy",
+          business_name: businessName || "Charlotte Esthy POS",
           app_url: config.origin,
-          subject: "Verify your email for Charlotte Esthy",
+          subject: `Verify your email for ${businessName || "Charlotte Esthy POS"}`,
         },
       };
       if (config.privateKey) {
@@ -113,13 +120,15 @@ export async function sendVerificationEmail(
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        console.error("[EmailJS] Verification email failed:", res.status, text);
-        return false;
+        const errorMsg = `EmailJS error (${res.status}): ${text || "Failed to send email"}`;
+        console.error("[EmailJS] Verification email failed:", errorMsg);
+        return { ok: false, error: errorMsg };
       }
-      return true;
-    } catch (err) {
-      console.error("[EmailJS] Network or timeout error sending verification email:", err);
-      return false;
+      return { ok: true };
+    } catch (err: any) {
+      const errorMsg = err?.message || "Network timeout connecting to EmailJS";
+      console.error("[EmailJS] Network or timeout error sending verification email:", errorMsg);
+      return { ok: false, error: errorMsg };
     }
   }
 
@@ -131,29 +140,43 @@ export async function sendVerificationEmail(
       body: JSON.stringify({
         from: config.from,
         to: [email],
-        subject: "Verify your email for Charlotte Esthy",
-        html: `<p>Welcome to Charlotte Esthy.</p><p><a href="${link}">Verify your email address</a> to finish creating your account.</p><p>This link expires in 24 hours. If you did not create this account, you can ignore this email.</p>`,
+        subject: "Verify your email for Charlotte Esthy POS",
+        html: `
+          <div style="font-family: sans-serif; max-width: 540px; margin: 0 auto; padding: 24px;">
+            <h2>Charlotte Esthy POS</h2>
+            <p>Hello ${fullName || "User"},</p>
+            <p>Welcome to <strong>${businessName || "Charlotte Esthy"}</strong>. Click below to verify your email address:</p>
+            <p style="margin: 24px 0;"><a href="${link}" style="background: #0c4a9e; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Verify Email Address</a></p>
+            <p style="font-size: 12px; color: #64748b;">Or paste: ${link}</p>
+          </div>
+        `,
       }),
       signal: AbortSignal.timeout(10_000),
       cache: "no-store",
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return { ok: false, error: `Resend error (${res.status}): ${text}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Failed to deliver email" };
   }
 }
 
 /**
- * Send welcome notification to newly added team member.
+ * Send cashier/staff account invitation email with a secure password creation link.
  */
-export async function sendTeamWelcomeEmail(
+export async function sendCashierInvitationEmail(
   config: NonNullable<ReturnType<typeof resetEmailConfiguration>>,
   email: string,
+  token: string,
   fullName: string,
   businessName: string,
   role: string,
-): Promise<boolean> {
-  const link = `${config.origin}/login`;
+): Promise<EmailResult> {
+  const link = `${config.origin}/activate?token=${encodeURIComponent(token)}`;
+  const roleDisplay = role === "cashier" ? "Cashier" : role === "manager" ? "Store Manager" : "Staff Member";
 
   if (config.provider === "emailjs") {
     try {
@@ -162,14 +185,18 @@ export async function sendTeamWelcomeEmail(
         template_id: config.templateId,
         user_id: config.publicKey,
         template_params: {
-          to_name: fullName || "Team Member",
+          to_name: fullName || "Staff Member",
           to_email: email,
           user_email: email,
           email,
+          activation_link: link,
           verification_link: link,
-          business_name: businessName || "Charlotte Esthy",
+          link,
+          token,
+          business_name: businessName || "Charlotte Esthy POS",
+          role: roleDisplay,
           app_url: config.origin,
-          subject: `Your ${role} account for ${businessName} is ready`,
+          subject: `You have been invited to join ${businessName} as ${roleDisplay}`,
         },
       };
       if (config.privateKey) {
@@ -183,14 +210,57 @@ export async function sendTeamWelcomeEmail(
         signal: AbortSignal.timeout(10_000),
         cache: "no-store",
       });
-      return res.ok;
-    } catch (err) {
-      console.error("[EmailJS] Error sending team welcome email:", err);
-      return false;
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        const errorMsg = `EmailJS error (${res.status}): ${text || "Failed to send email"}`;
+        console.error("[EmailJS] Cashier invitation email failed:", errorMsg);
+        return { ok: false, error: errorMsg };
+      }
+      return { ok: true };
+    } catch (err: any) {
+      const errorMsg = err?.message || "Network timeout connecting to EmailJS";
+      console.error("[EmailJS] Network or timeout error sending invitation email:", errorMsg);
+      return { ok: false, error: errorMsg };
     }
   }
 
-  return true;
+  // Resend fallback
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: config.from,
+        to: [email],
+        subject: `You have been invited to join ${businessName} as ${roleDisplay}`,
+        html: `
+          <div style="font-family: system-ui, sans-serif; max-width: 560px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0;">
+            <h2 style="color: #0a132c; margin-top: 0;">Charlotte Esthy POS</h2>
+            <p>Hello <strong>${fullName}</strong>,</p>
+            <p>You have been invited by the store owner to join <strong>${businessName}</strong> as a <strong>${roleDisplay}</strong>.</p>
+            <p>Please click the button below to activate your account and set your password:</p>
+            <div style="margin: 28px 0;">
+              <a href="${link}" style="background: #0c4a9e; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: bold; display: inline-block;">
+                Activate Account &rarr;
+              </a>
+            </div>
+            <p style="font-size: 12px; color: #64748b;">Or paste this activation link into your browser:<br/><span style="color: #0c4a9e;">${link}</span></p>
+            <p style="font-size: 12px; color: #94a3b8; margin-top: 24px;">This activation link expires in 48 hours. If you did not expect this invitation, you can ignore this email.</p>
+          </div>
+        `,
+      }),
+      signal: AbortSignal.timeout(10_000),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return { ok: false, error: `Resend error (${res.status}): ${text}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Failed to deliver email" };
+  }
 }
 
 /**
@@ -200,7 +270,7 @@ export async function sendResetEmail(
   config: NonNullable<ReturnType<typeof resetEmailConfiguration>>,
   email: string,
   token: string,
-): Promise<boolean> {
+): Promise<EmailResult> {
   const link = `${config.origin}/reset-password?token=${encodeURIComponent(token)}`;
 
   if (config.provider === "emailjs") {
@@ -214,6 +284,8 @@ export async function sendResetEmail(
           user_email: email,
           email,
           reset_link: link,
+          verification_link: link,
+          link,
           token,
           app_url: config.origin,
           subject: "Reset your Charlotte Esthy password",
@@ -233,13 +305,15 @@ export async function sendResetEmail(
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        console.error("[EmailJS] Reset email failed:", res.status, text);
-        return false;
+        const errorMsg = `EmailJS error (${res.status}): ${text || "Failed to send reset email"}`;
+        console.error("[EmailJS] Reset email failed:", errorMsg);
+        return { ok: false, error: errorMsg };
       }
-      return true;
-    } catch (err) {
-      console.error("[EmailJS] Error sending reset email:", err);
-      return false;
+      return { ok: true };
+    } catch (err: any) {
+      const errorMsg = err?.message || "Network timeout connecting to EmailJS";
+      console.error("[EmailJS] Network or timeout error sending reset email:", errorMsg);
+      return { ok: false, error: errorMsg };
     }
   }
 
@@ -252,13 +326,17 @@ export async function sendResetEmail(
         from: config.from,
         to: [email],
         subject: "Reset your Charlotte Esthy password",
-        html: `<p>We received a request to reset your Charlotte Esthy password.</p><p><a href="${link}">Choose a new password</a></p><p>This link expires in 60 minutes. If you did not request it, you can ignore this email.</p>`,
+        html: `<p>We received a request to reset your Charlotte Esthy password.</p><p><a href="${link}">Choose a new password</a></p><p>This link expires in 1 hour.</p>`,
       }),
       signal: AbortSignal.timeout(10_000),
       cache: "no-store",
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return { ok: false, error: `Resend error (${res.status}): ${text}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Failed to deliver email" };
   }
 }

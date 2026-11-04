@@ -16,6 +16,7 @@ import {
 import { clearRateLimit, clientIp, HttpError, publicRoute, rateLimit, readJson } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import {
+  consumeActivation,
   consumeEmailVerification,
   createEmailVerification,
   createEmbeddedSession,
@@ -239,6 +240,21 @@ export const POST = publicRoute(async ({ req, params }) => {
       return { ok: true };
     case "forgot":
       return forgot(req);
+    case "activate": {
+      const input = await readJson(
+        req,
+        z.object({
+          token: z.string().min(10).max(200),
+          password: passwordField,
+        }),
+      );
+      rateLimit(`activate:${clientIp(req)}`, 12, 15 * 60 * 1000);
+      const user = await consumeActivation(input.token, input.password);
+      return Response.json(
+        { ok: true, email: user.email, fullName: user.fullName },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     case "reset":
       return reset(req);
     default:

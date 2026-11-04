@@ -1,12 +1,13 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { memberships, users } from "@/db/schema";
 import { HttpError, readJson, route } from "@/lib/api";
 import { audit } from "@/lib/audit";
-import { hashPassword } from "@/lib/password";
-import { resetEmailConfiguration, sendTeamWelcomeEmail } from "@/lib/recovery-email";
-import { emailField, passwordField } from "@/lib/validation";
+import { createActivationToken } from "@/lib/auth";
+import { hashPassword, newToken } from "@/lib/password";
+import { resetEmailConfiguration, sendCashierInvitationEmail } from "@/lib/recovery-email";
+import { emailField } from "@/lib/validation";
 
 export const GET = route({ permission: "team.view" }, async ({ auth }) => {
   const rows = await db
@@ -18,50 +19,149 @@ export const GET = route({ permission: "team.view" }, async ({ auth }) => {
       phone: users.phone,
       role: memberships.role,
       status: memberships.status,
+      emailVerifiedAt: users.emailVerifiedAt,
       createdAt: memberships.createdAt,
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(eq(memberships.businessId, auth.business.id))
     .orderBy(asc(memberships.createdAt));
-  return { members: rows.map((m) => ({ ...m, createdAt: m.createdAt.toISOString(), isYou: m.userId === auth.user.id })) };
+
+  return {
+    members: rows.map((m) => ({
+      ...m,
+      isActivated: Boolean(m.emailVerifiedAt),
+      createdAt: m.createdAt.toISOString(),
+      isYou: m.userId === auth.user.id,
+    })),
+  };
 });
 
 const schema = z.object({
   fullName: z.string().trim().min(2, "Enter the member's full name").max(100),
   email: emailField,
-  password: passwordField,
-  role: z.enum(["owner", "manager", "cashier"]),
+  password: z.string().min(8, "Password must be at least 8 characters").max(128).optional(),
+  role: z.enum(["owner", "manager", "cashier"]).default("cashier"),
 });
 
-/** Creates an account for a team member with a temporary password. Managers may only create cashiers. */
+/**
+ * Creates an authorized account for a team member and emails an invitation with an activation link.
+ * Cashiers set their own passwords upon activation.
+ */
 export const POST = route({ permission: "team.manage" }, async ({ req, auth }) => {
   const input = await readJson(req, schema);
   if (auth.role !== "owner" && input.role !== "cashier") {
     throw new HttpError(403, "Managers can only add cashier accounts.");
   }
-  const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.email, input.email));
-  if (exists) throw new HttpError(409, "An account with this email already exists.", { email: "An account with this email already exists." });
-  const passwordHash = await hashPassword(input.password);
-  const id = await db.transaction(async (tx) => {
-    // The owner vouches for this person and hands them a temporary password;
-    // there is no email-verification step for staff accounts.
-    const [u] = await tx
-      .insert(users)
-      .values({ email: input.email, passwordHash, fullName: input.fullName, emailVerifiedAt: new Date() })
-      .returning({ id: users.id });
-    const [m] = await tx.insert(memberships).values({ businessId: auth.business.id, userId: u.id, role: input.role }).returning({ id: memberships.id });
-    await audit(tx, { businessId: auth.business.id, userId: auth.user.id, action: "team.member_added", entityType: "membership", entityId: m.id, metadata: { email: input.email, role: input.role } });
-    return m.id;
-  });
 
-  // If EmailJS/email provider is configured, notify the staff member
-  const emailConfig = resetEmailConfiguration();
-  if (emailConfig) {
-    sendTeamWelcomeEmail(emailConfig, input.email, input.fullName, auth.business.name, input.role).catch((err) => {
-      console.error("[team] Failed to send welcome email to new member:", err);
+  const normalizedEmail = input.email.toLowerCase().trim();
+
+  // Check if account already exists
+  const [existingUser] = await db
+    .select({ id: users.id, email: users.email, emailVerifiedAt: users.emailVerifiedAt })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${normalizedEmail}`);
+
+  let targetUserId = existingUser?.id;
+  let memberId: string;
+  let isRetry = false;
+
+  if (existingUser) {
+    // Check if user is already a member of this business
+    const [existingMember] = await db
+      .select({ id: memberships.id, role: memberships.role, status: memberships.status })
+      .from(memberships)
+      .where(and(eq(memberships.businessId, auth.business.id), eq(memberships.userId, existingUser.id)));
+
+    if (existingMember) {
+      if (existingUser.emailVerifiedAt) {
+        throw new HttpError(409, "A team member with this email address already exists and is active.", {
+          email: "A team member with this email address already exists.",
+        });
+      }
+      // If the user was added earlier but not activated yet, prevent duplicate error and resend!
+      isRetry = true;
+      memberId = existingMember.id;
+    } else {
+      // User exists in system, attach to this business
+      const [m] = await db
+        .insert(memberships)
+        .values({ businessId: auth.business.id, userId: existingUser.id, role: input.role })
+        .returning({ id: memberships.id });
+      memberId = m.id;
+    }
+  } else {
+    // Create new user with unverified status (until activated)
+    // Use dummy random hash if password not provided so account cannot be accessed without activation
+    const passwordHash = await hashPassword(input.password || newToken());
+    const isManualPassword = Boolean(input.password);
+
+    const result = await db.transaction(async (tx) => {
+      const [u] = await tx
+        .insert(users)
+        .values({
+          email: normalizedEmail,
+          passwordHash,
+          fullName: input.fullName,
+          emailVerifiedAt: isManualPassword ? new Date() : null,
+        })
+        .returning({ id: users.id });
+
+      const [m] = await tx
+        .insert(memberships)
+        .values({ businessId: auth.business.id, userId: u.id, role: input.role })
+        .returning({ id: memberships.id });
+
+      await audit(tx, {
+        businessId: auth.business.id,
+        userId: auth.user.id,
+        action: "team.member_added",
+        entityType: "membership",
+        entityId: m.id,
+        metadata: { email: normalizedEmail, role: input.role, manualPassword: isManualPassword },
+      });
+
+      return { userId: u.id, memberId: m.id };
     });
+
+    targetUserId = result.userId;
+    memberId = result.memberId;
   }
 
-  return Response.json({ id }, { status: 201 });
+  // Generate activation token & activation link
+  const emailConfig = resetEmailConfiguration();
+  const token = await createActivationToken(targetUserId!);
+  const activationLink = `${emailConfig?.origin || process.env.APP_URL || "http://localhost:3000"}/activate?token=${encodeURIComponent(token)}`;
+
+  let emailSent = false;
+  let emailError: string | undefined;
+
+  if (emailConfig) {
+    const res = await sendCashierInvitationEmail(
+      emailConfig,
+      normalizedEmail,
+      token,
+      input.fullName,
+      auth.business.name,
+      input.role,
+    );
+    emailSent = res.ok;
+    emailError = res.error;
+  } else {
+    emailError = "No email provider (EmailJS/Resend) configured in environment.";
+  }
+
+  return Response.json(
+    {
+      id: memberId,
+      email: normalizedEmail,
+      fullName: input.fullName,
+      role: input.role,
+      isRetry,
+      emailSent,
+      emailError,
+      activationLink,
+    },
+    { status: isRetry ? 200 : 201 },
+  );
 });

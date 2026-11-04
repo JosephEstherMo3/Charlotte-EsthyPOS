@@ -25,7 +25,7 @@ import { Alert, cn } from "@/components/ui";
 import { ApiError, apiFetch, useApi } from "@/lib/client";
 import { clearEmbeddedSession, getEmbeddedToken, setEmbeddedSession } from "@/lib/embedded-session";
 
-export type AuthMode = "login" | "register" | "forgot-password" | "reset-password" | "verify-email";
+export type AuthMode = "login" | "register" | "forgot-password" | "reset-password" | "verify-email" | "activate";
 
 function AuthField({
   id,
@@ -195,10 +195,34 @@ function LoginForm() {
         <Alert tone="warning">Your session ended before its normal expiry, so we signed you out for security. Please sign in again.</Alert>
       )}
       {params.get("reset") && <Alert tone="success">Password updated. You can now sign in.</Alert>}
+      {params.get("activated") && (
+        <Alert tone="success">Your staff account has been activated successfully! You can now sign in with your email and password.</Alert>
+      )}
       {params.get("verified") && (
         <Alert tone="success">Your account has been created successfully. Sign in to continue.</Alert>
       )}
-      {s.error && <Alert tone="error">{s.error}</Alert>}
+      {s.error && (
+        <Alert tone="error">
+          <p>{s.error}</p>
+          {s.error.toLowerCase().includes("verify your email") && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!email) return;
+                try {
+                  await apiFetch("/api/auth/resend-verification", { method: "POST", body: { email: email.trim().toLowerCase() } });
+                  alert("Verification email resent! Check your inbox.");
+                } catch (e: any) {
+                  alert(e.message || "Failed to resend verification email.");
+                }
+              }}
+              className="mt-2 block text-xs font-bold text-blue-700 underline hover:text-blue-800"
+            >
+              Resend verification email to {email || "my address"} &rarr;
+            </button>
+          )}
+        </Alert>
+      )}
 
       <AuthField id="login-email" label="Email address" icon={Mail} error={s.fields.email} required>
         <input
@@ -581,6 +605,74 @@ function ForgotForm() {
   );
 }
 
+function ActivateForm() {
+  const token = useSearchParams().get("token") ?? "";
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const s = useSubmit();
+
+  if (!token) {
+    return (
+      <div className="space-y-4">
+        <Alert tone="error">
+          This activation link is missing its secure token. Please ask your store owner or manager to resend your invitation link.
+        </Alert>
+        <Link href="/login" className="block text-center text-sm font-semibold text-blue-600 hover:underline">
+          Go to sign in
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      noValidate
+      className="space-y-4"
+      onSubmit={(e) =>
+        s.run(async () => {
+          if (password !== confirm) {
+            throw new ApiError("Passwords do not match", 0, { confirm: "Passwords do not match" });
+          }
+          await apiFetch("/api/auth/activate", { method: "POST", body: { token, password } });
+          window.location.href = "/login?activated=1";
+        }, e)
+      }
+    >
+      {s.error && <Alert tone="error">{s.error}</Alert>}
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-xs text-blue-900 leading-relaxed mb-2">
+        Welcome to Charlotte Esthy POS! Please choose your password below to activate your staff account.
+      </div>
+      <PasswordField
+        id="activate-pwd"
+        label="Create password"
+        value={password}
+        onChange={setPassword}
+        error={s.fields.password}
+        autoComplete="new-password"
+        hint="Must be at least 8 characters."
+        placeholder="Enter your new password"
+      />
+      <PasswordField
+        id="activate-confirm"
+        label="Confirm password"
+        value={confirm}
+        onChange={setConfirm}
+        error={s.fields.confirm}
+        autoComplete="new-password"
+        placeholder="Confirm your new password"
+      />
+      <button
+        type="submit"
+        disabled={s.loading || password.length < 8}
+        className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-blue-600 to-sky-500 px-6 font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-700 hover:to-sky-600 active:scale-[0.99] disabled:opacity-60"
+      >
+        {s.loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+        <span>{s.loading ? "Activating account…" : "Activate Account & Continue"}</span>
+      </button>
+    </form>
+  );
+}
+
 function ResetForm() {
   const token = useSearchParams().get("token") ?? "";
   const [password, setPassword] = useState("");
@@ -639,6 +731,7 @@ const COPY: Record<AuthMode, { title: string; subtitle: string }> = {
   "forgot-password": { title: "Password recovery", subtitle: "Enter your email to receive recovery instructions." },
   "reset-password": { title: "Choose a new password", subtitle: "Pick a strong password you haven't used before." },
   "verify-email": { title: "Verify your email", subtitle: "One quick step to finish creating your account." },
+  activate: { title: "Activate staff account", subtitle: "Set your personal password to activate your staff account." },
 };
 
 export function AuthScreen({ mode }: { mode: AuthMode }) {
@@ -651,6 +744,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
   else if (mode === "register") form = <RegisterForm />;
   else if (mode === "forgot-password") form = <ForgotForm />;
   else if (mode === "verify-email") form = <VerifyEmailForm />;
+  else if (mode === "activate") form = <ActivateForm />;
   else form = <ResetForm />;
 
   const features = [

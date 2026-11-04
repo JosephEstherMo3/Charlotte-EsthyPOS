@@ -10,12 +10,13 @@ import {
   emailVerifications,
   embeddedSessions,
   memberships,
+  passwordResets,
   sessions,
   users,
   type Settings,
 } from "@/db/schema";
 import { HttpError } from "@/lib/errors";
-import { hashToken, newToken } from "@/lib/password";
+import { hashPassword, hashToken, newToken } from "@/lib/password";
 import type { Role } from "@/lib/permissions";
 
 export const SESSION_COOKIE = "ce_session";
@@ -111,6 +112,54 @@ export async function createEmailVerification(userId: string): Promise<string> {
     expiresAt: new Date(Date.now() + VERIFICATION_HOURS * 3_600_000),
   });
   return token;
+}
+
+/**
+ * Single-use account activation and password setup token for newly invited team members.
+ */
+export async function createActivationToken(userId: string): Promise<string> {
+  const token = newToken();
+  const expiresAt = new Date(Date.now() + 48 * 3_600_000); // 48 hours
+  await db.insert(passwordResets).values({
+    userId,
+    tokenHash: hashToken(token),
+    expiresAt,
+  });
+  return token;
+}
+
+export async function consumeActivation(
+  token: string,
+  newPassword: string,
+): Promise<{ email: string; fullName: string }> {
+  const now = new Date();
+  const passwordHash = await hashPassword(newPassword);
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(passwordResets)
+      .where(
+        and(
+          eq(passwordResets.tokenHash, hashToken(token)),
+          isNull(passwordResets.usedAt),
+          gt(passwordResets.expiresAt, now),
+        ),
+      )
+      .for("update");
+    if (!row) {
+      throw new HttpError(
+        400,
+        "This activation link is invalid or has expired. Please contact your store manager to resend your invitation.",
+      );
+    }
+    await tx.update(users).set({ passwordHash, emailVerifiedAt: now }).where(eq(users.id, row.userId));
+    await tx.update(passwordResets).set({ usedAt: now }).where(eq(passwordResets.id, row.id));
+    await tx.delete(sessions).where(eq(sessions.userId, row.userId));
+    await tx.delete(embeddedSessions).where(eq(embeddedSessions.userId, row.userId));
+    await tx.delete(emailVerifications).where(eq(emailVerifications.userId, row.userId));
+    const [user] = await tx.select({ email: users.email, fullName: users.fullName }).from(users).where(eq(users.id, row.userId));
+    return user;
+  });
 }
 
 /** Marks the account verified. Locking the row stops two tabs using one link. */

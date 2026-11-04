@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { AuthScreen, type AuthMode } from "@/components/auth-forms";
 
-const MODES = ["login", "register", "forgot-password", "reset-password", "verify-email"] as const;
+const MODES = ["login", "register", "forgot-password", "reset-password", "verify-email", "activate"] as const;
 
 export const dynamicParams = false;
 

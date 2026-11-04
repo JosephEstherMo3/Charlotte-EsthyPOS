@@ -27,14 +27,17 @@ export const GET = route({ permission: "team.view" }, async ({ auth }) => {
     .where(eq(memberships.businessId, auth.business.id))
     .orderBy(asc(memberships.createdAt));
 
-  return {
-    members: rows.map((m) => ({
-      ...m,
-      isActivated: Boolean(m.emailVerifiedAt),
-      createdAt: m.createdAt.toISOString(),
-      isYou: m.userId === auth.user.id,
-    })),
-  };
+  return Response.json(
+    {
+      members: rows.map((m) => ({
+        ...m,
+        isActivated: Boolean(m.emailVerifiedAt),
+        createdAt: m.createdAt.toISOString(),
+        isYou: m.userId === auth.user.id,
+      })),
+    },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } },
+  );
 });
 
 const schema = z.object({

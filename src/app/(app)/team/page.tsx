@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Copy, KeyRound, Mail, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-context";
-import { Alert, Badge, Button, Card, CardHeader, EmptyState, ErrorState, Modal, PageHeader, SelectField, Skeleton, TextField, useToast } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, ErrorState, Modal, PageHeader, SelectField, Skeleton, TextField, useToast } from "@/components/ui";
 import { ApiError, apiFetch, useApi } from "@/lib/client";
 import { PERMISSION_LABELS, PERMISSIONS, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_PERMISSIONS, type Role } from "@/lib/permissions";
 
@@ -416,11 +416,28 @@ export default function TeamPage() {
     error?: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [deletingMember, setDeletingMember] = useState<Member | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const toast = useToast();
 
   const isOwner = app.role === "owner";
   const allowedRoles: Role[] = isOwner ? ["owner", "manager", "cashier"] : ["cashier"];
   const canManage = (m: Member) => app.can("team.manage") && (isOwner || m.role === "cashier");
+
+  const handleDeleteMember = async () => {
+    if (!deletingMember) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/api/team/${deletingMember.id}`, { method: "DELETE" });
+      toast.success(`${deletingMember.fullName} was deleted from the team.`);
+      setDeletingMember(null);
+      reload();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete team member.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const resendInvite = async (m: Member) => {
     setResendingId(m.id);
@@ -542,6 +559,20 @@ export default function TeamPage() {
                     <span className="hidden sm:inline">Manage</span>
                   </Button>
                 )}
+
+                {canManage(m) && !m.isYou && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeletingMember(m)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    title={`Delete ${m.fullName}`}
+                    aria-label={`Delete ${m.fullName}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -658,6 +689,19 @@ export default function TeamPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {deletingMember && (
+        <ConfirmDialog
+          open
+          danger
+          title="Delete Team Member"
+          message={`Are you sure you want to permanently delete ${deletingMember.fullName} (${deletingMember.email}) from your team? This action cannot be undone.`}
+          confirmLabel="Yes, Delete Member"
+          loading={isDeleting}
+          onConfirm={handleDeleteMember}
+          onClose={() => !isDeleting && setDeletingMember(null)}
+        />
       )}
     </div>
   );

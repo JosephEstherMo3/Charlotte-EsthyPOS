@@ -81,7 +81,7 @@ export const PATCH = route({ permission: "team.manage" }, async ({ req, auth, pa
       metadata: { email: target.email, ...(input.role ? { role: { from: target.m.role, to: input.role } } : {}) },
     });
   });
-  return { ok: true };
+  return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
 });
 
 export const DELETE = route({ permission: "team.manage" }, async ({ auth, params }) => {
@@ -159,5 +159,5 @@ export const DELETE = route({ permission: "team.manage" }, async ({ auth, params
     });
   });
 
-  return { ok: true };
+  return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
 });

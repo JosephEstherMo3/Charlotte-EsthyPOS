@@ -13,7 +13,9 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "account:reset": "tsx scripts/reset-account.ts",
     "account:update": "tsx scripts/update-owner.ts",
-    "account:add": "tsx scripts/add-team-user.ts"
+    "account:add": "tsx scripts/add-team-user.ts",
+    "account:verify-all": "tsx scripts/verify-all-users.ts",
+    "email:test": "tsx scripts/test-email.ts"
   },
   "dependencies": {
     "dotenv": "17.3.1",

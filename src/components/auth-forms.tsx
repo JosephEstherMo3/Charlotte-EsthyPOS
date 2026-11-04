@@ -239,12 +239,15 @@ function LoginForm() {
         <span>{s.loading ? "Signing in…" : "Sign in"}</span>
       </button>
 
-      <p className="text-center text-sm text-slate-500 pt-2">
-        Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-blue-600 hover:text-blue-700 hover:underline">
-          Create an account
-        </Link>
-      </p>
+      <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3.5 text-center">
+        <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700">
+          <ShieldCheck className="h-4 w-4 text-blue-600" />
+          <span>Authorized Staff Access Only</span>
+        </div>
+        <p className="mt-1 text-[11px] text-slate-500 leading-normal">
+          Accounts are provisioned by store owners. Contact your administrator or manager for credentials.
+        </p>
+      </div>
     </form>
   );
 }
@@ -288,14 +291,53 @@ function CreatedPanel({
   );
 }
 
+function AuthorizedOnlyPanel() {
+  return (
+    <div className="space-y-6 text-center">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-200 shadow-sm">
+        <ShieldCheck className="h-8 w-8" />
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-xl font-bold text-slate-900">
+          Self-Registration Closed
+        </h2>
+        <p className="text-sm leading-relaxed text-slate-600">
+          Charlotte Esthy POS is a private store system. Accounts are only issued to authorized staff by store administrators in <strong>Team &amp; Permissions</strong>.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-left space-y-2.5">
+        <p className="text-xs font-semibold text-slate-700">Need an account?</p>
+        <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4">
+          <li>Ask your store owner or manager to add your account from their dashboard.</li>
+          <li>Already received your login credentials? Sign in below.</li>
+        </ul>
+      </div>
+
+      <Link
+        href="/login"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-sky-500 px-6 font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-700 hover:to-sky-600 active:scale-[0.99]"
+      >
+        <LogIn className="h-5 w-5" />
+        <span>Return to Sign in</span>
+      </Link>
+    </div>
+  );
+}
+
 function RegisterForm() {
   const [fullName, setFullName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [done, setDone] = useState<{ email: string; verificationRequired: boolean } | null>(null);
-  const config = useApi<{ resetEmailConfigured: boolean }>("/api/auth/config");
+  const config = useApi<{ resetEmailConfigured: boolean; allowPublicRegistration?: boolean }>("/api/auth/config");
   const s = useSubmit();
+
+  if (config.data && !config.data.allowPublicRegistration) {
+    return <AuthorizedOnlyPanel />;
+  }
 
   if (done) {
     return (
@@ -601,8 +643,8 @@ const COPY: Record<AuthMode, { title: string; subtitle: string }> = {
 
 export function AuthScreen({ mode }: { mode: AuthMode }) {
   const isRegister = mode === "register";
-  const title = isRegister ? "Create an account" : COPY[mode].title;
-  const subtitle = isRegister ? "Sign up to start your point of sale." : COPY[mode].subtitle;
+  const title = isRegister ? "Authorized Access" : COPY[mode].title;
+  const subtitle = isRegister ? "Charlotte Esthy POS staff portal" : COPY[mode].subtitle;
 
   let form: ReactNode;
   if (mode === "login") form = <LoginForm />;

@@ -5,6 +5,7 @@ import { memberships, users } from "@/db/schema";
 import { HttpError, readJson, route } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { hashPassword } from "@/lib/password";
+import { resetEmailConfiguration, sendTeamWelcomeEmail } from "@/lib/recovery-email";
 import { emailField, passwordField } from "@/lib/validation";
 
 export const GET = route({ permission: "team.view" }, async ({ auth }) => {
@@ -53,5 +54,14 @@ export const POST = route({ permission: "team.manage" }, async ({ req, auth }) =
     await audit(tx, { businessId: auth.business.id, userId: auth.user.id, action: "team.member_added", entityType: "membership", entityId: m.id, metadata: { email: input.email, role: input.role } });
     return m.id;
   });
+
+  // If EmailJS/email provider is configured, notify the staff member
+  const emailConfig = resetEmailConfiguration();
+  if (emailConfig) {
+    sendTeamWelcomeEmail(emailConfig, input.email, input.fullName, auth.business.name, input.role).catch((err) => {
+      console.error("[team] Failed to send welcome email to new member:", err);
+    });
+  }
+
   return Response.json({ id }, { status: 201 });
 });

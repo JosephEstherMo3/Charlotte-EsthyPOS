@@ -1,4 +1,8 @@
-import "server-only";
+import dns from "node:dns";
+
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {}
 
 export type EmailConfig =
   | {
@@ -137,6 +141,56 @@ export async function sendVerificationEmail(
   } catch {
     return false;
   }
+}
+
+/**
+ * Send welcome notification to newly added team member.
+ */
+export async function sendTeamWelcomeEmail(
+  config: NonNullable<ReturnType<typeof resetEmailConfiguration>>,
+  email: string,
+  fullName: string,
+  businessName: string,
+  role: string,
+): Promise<boolean> {
+  const link = `${config.origin}/login`;
+
+  if (config.provider === "emailjs") {
+    try {
+      const payload: Record<string, unknown> = {
+        service_id: config.serviceId,
+        template_id: config.templateId,
+        user_id: config.publicKey,
+        template_params: {
+          to_name: fullName || "Team Member",
+          to_email: email,
+          user_email: email,
+          email,
+          verification_link: link,
+          business_name: businessName || "Charlotte Esthy",
+          app_url: config.origin,
+          subject: `Your ${role} account for ${businessName} is ready`,
+        },
+      };
+      if (config.privateKey) {
+        payload.accessToken = config.privateKey;
+      }
+
+      const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+        cache: "no-store",
+      });
+      return res.ok;
+    } catch (err) {
+      console.error("[EmailJS] Error sending team welcome email:", err);
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**

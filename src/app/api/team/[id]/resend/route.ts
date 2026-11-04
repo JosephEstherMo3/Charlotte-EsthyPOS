@@ -59,3 +59,4 @@ export const POST = route({ permission: "team.manage" }, async ({ auth, params }
     fullName: target.fullName,
   });
 });
+

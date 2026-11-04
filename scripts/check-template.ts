@@ -38,3 +38,4 @@ async function checkTemplate(templateId: string) {
 
 const id = process.argv[2] || process.env.EMAILJS_TEMPLATE_ID || "template_dlfnvnh";
 checkTemplate(id);
+

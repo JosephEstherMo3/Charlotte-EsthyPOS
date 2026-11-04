@@ -15,7 +15,7 @@ async function run() {
   console.log(`Connected to store: "${biz.name}" (${biz.id})`);
 
   console.log("\n=== 2. CREATING CASHIER ACCOUNT (NO PLAIN TEXT PASSWORD REQUIRED) ===");
-  const testEmail = `cashier-${Date.now()}@charlotteesthy.local`;
+  const testEmail = `charlotteesthy49+cashier${Date.now()}@gmail.com`;
   const cashierName = "Esther Cashier";
   const dummyHash = await hashPassword("unusable-placeholder-until-activation");
 
@@ -102,3 +102,4 @@ run()
     process.exit(1);
   })
   .finally(() => pool.end());
+

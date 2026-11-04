@@ -94,6 +94,8 @@ export async function sendVerificationEmail(
         user_id: config.publicKey,
         template_params: {
           to_name: fullName || "Valued User",
+          name: fullName || "Valued User",
+          user_name: fullName || "Valued User",
           to_email: email,
           user_email: email,
           email,
@@ -102,6 +104,9 @@ export async function sendVerificationEmail(
           link,
           token,
           business_name: businessName || "Charlotte Esthy POS",
+          company_name: businessName || "Charlotte Esthy POS",
+          logo_url: "https://raw.githubusercontent.com/JosephEstherMo3/Charlotte-EsthyPOS/main/public/logo.png",
+          support_email: "charlotteesthy49@gmail.com",
           app_url: config.origin,
           subject: `Verify your email for ${businessName || "Charlotte Esthy POS"}`,
         },
@@ -112,7 +117,10 @@ export async function sendVerificationEmail(
 
       const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "CharlotteEsthyPOS/1.0 (Windows NT 10.0; Win64; x64)",
+        },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10_000),
         cache: "no-store",
@@ -186,6 +194,8 @@ export async function sendCashierInvitationEmail(
         user_id: config.publicKey,
         template_params: {
           to_name: fullName || "Staff Member",
+          name: fullName || "Staff Member",
+          user_name: fullName || "Staff Member",
           to_email: email,
           user_email: email,
           email,
@@ -194,7 +204,10 @@ export async function sendCashierInvitationEmail(
           link,
           token,
           business_name: businessName || "Charlotte Esthy POS",
+          company_name: businessName || "Charlotte Esthy POS",
           role: roleDisplay,
+          logo_url: "https://raw.githubusercontent.com/JosephEstherMo3/Charlotte-EsthyPOS/main/public/logo.png",
+          support_email: "charlotteesthy49@gmail.com",
           app_url: config.origin,
           subject: `You have been invited to join ${businessName} as ${roleDisplay}`,
         },
@@ -205,7 +218,10 @@ export async function sendCashierInvitationEmail(
 
       const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "CharlotteEsthyPOS/1.0 (Windows NT 10.0; Win64; x64)",
+        },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10_000),
         cache: "no-store",
@@ -284,9 +300,12 @@ export async function sendResetEmail(
           user_email: email,
           email,
           reset_link: link,
+          activation_link: link,
           verification_link: link,
           link,
           token,
+          logo_url: "https://raw.githubusercontent.com/JosephEstherMo3/Charlotte-EsthyPOS/main/public/logo.png",
+          support_email: "charlotteesthy49@gmail.com",
           app_url: config.origin,
           subject: "Reset your Charlotte Esthy password",
         },
@@ -297,7 +316,10 @@ export async function sendResetEmail(
 
       const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "CharlotteEsthyPOS/1.0 (Windows NT 10.0; Win64; x64)",
+        },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10_000),
         cache: "no-store",

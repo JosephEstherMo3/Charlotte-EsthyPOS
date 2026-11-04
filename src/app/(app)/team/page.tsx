@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, KeyRound, Mail, Pencil, Plus, ShieldCheck } from "lucide-react";
+import { Check, Copy, KeyRound, Mail, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-context";
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, ErrorState, Modal, PageHeader, SelectField, Skeleton, TextField, useToast } from "@/components/ui";
 import { ApiError, apiFetch, useApi } from "@/lib/client";
@@ -252,6 +252,8 @@ function EditMember({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function save() {
     setBusy(true);
@@ -269,6 +271,22 @@ function EditMember({
       setErr((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function deleteMember() {
+    setDeleting(true);
+    setErr("");
+    try {
+      await apiFetch(`/api/team/${member.id}`, { method: "DELETE" });
+      toast.success("Team member deleted successfully");
+      onSaved();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -322,14 +340,63 @@ function EditMember({
           <option value="disabled">Disabled</option>
         </SelectField>
         {!member.isYou && (
-          <TextField
-            label="Set new password (optional)"
-            type="text"
-            autoComplete="off"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            hint="Signs them out of all devices and forces them to sign in again."
-          />
+          <>
+            <TextField
+              label="Set new password (optional)"
+              type="text"
+              autoComplete="off"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              hint="Signs them out of all devices and forces them to sign in again."
+            />
+
+            <div className="pt-4 border-t border-slate-200">
+              {confirmDelete ? (
+                <div className="rounded-xl border border-red-200 bg-red-50/60 p-3.5 space-y-3">
+                  <p className="text-xs font-semibold text-red-900">
+                    Are you sure you want to delete {member.fullName}?
+                  </p>
+                  <p className="text-xs text-red-700 leading-relaxed">
+                    This will permanently remove this account from your store. If they have no recorded transactions, their profile will be completely erased.
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      loading={deleting}
+                      onClick={deleteMember}
+                    >
+                      Yes, Delete Member
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={deleting}
+                      onClick={() => setConfirmDelete(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-800">Remove member</p>
+                    <p className="text-xs text-slate-500">Permanently delete from team</p>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={busy || deleting}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5 inline" />
+                    Delete Member
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </Modal>

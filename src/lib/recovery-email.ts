@@ -27,17 +27,48 @@ export interface EmailResult {
 }
 
 /**
+ * Helper to extract the actual origin URL from an incoming Next.js request.
+ * Automatically handles localhost, custom domains, and Vercel deployments.
+ */
+export function getOriginFromRequest(req: Request): string {
+  const forwardedHost = req.headers.get("x-forwarded-host");
+  const host = forwardedHost || req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
+  if (host) {
+    return `${proto}://${host}`;
+  }
+  return (
+    process.env.APP_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000")
+  );
+}
+
+/**
  * Email delivery configuration. Supports EmailJS and Resend.
  * Builds verification, activation and password reset links pointing to a trusted application origin.
  */
-export function resetEmailConfiguration(): EmailConfig | null {
-  const appUrl = process.env.APP_URL?.trim() || "http://localhost:3000";
-  let origin = "http://localhost:3000";
-  try {
-    const url = new URL(appUrl);
-    origin = url.origin;
-  } catch {
-    /* fallback to default */
+export function resetEmailConfiguration(preferredOrigin?: string): EmailConfig | null {
+  let origin = preferredOrigin;
+  if (!origin) {
+    const rawUrl =
+      process.env.APP_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000");
+    try {
+      const parsed = new URL(rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`);
+      origin = parsed.origin;
+    } catch {
+      origin = "http://localhost:3000";
+    }
   }
 
   // 1. Check EmailJS configuration

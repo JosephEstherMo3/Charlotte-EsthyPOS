@@ -6,7 +6,7 @@ import { HttpError, readJson, route } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { createActivationToken } from "@/lib/auth";
 import { hashPassword, newToken } from "@/lib/password";
-import { resetEmailConfiguration, sendCashierInvitationEmail } from "@/lib/recovery-email";
+import { getOriginFromRequest, resetEmailConfiguration, sendCashierInvitationEmail } from "@/lib/recovery-email";
 import { emailField } from "@/lib/validation";
 
 export const GET = route({ permission: "team.view" }, async ({ auth }) => {
@@ -129,9 +129,10 @@ export const POST = route({ permission: "team.manage" }, async ({ req, auth }) =
   }
 
   // Generate activation token & activation link
-  const emailConfig = resetEmailConfiguration();
+  const origin = getOriginFromRequest(req);
+  const emailConfig = resetEmailConfiguration(origin);
   const token = await createActivationToken(targetUserId!);
-  const activationLink = `${emailConfig?.origin || process.env.APP_URL || "http://localhost:3000"}/activate?token=${encodeURIComponent(token)}`;
+  const activationLink = `${emailConfig?.origin || origin}/activate?token=${encodeURIComponent(token)}`;
 
   let emailSent = false;
   let emailError: string | undefined;

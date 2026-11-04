@@ -3,9 +3,9 @@ import { db } from "@/db";
 import { memberships, users } from "@/db/schema";
 import { HttpError, parseId, route } from "@/lib/api";
 import { createActivationToken } from "@/lib/auth";
-import { resetEmailConfiguration, sendCashierInvitationEmail } from "@/lib/recovery-email";
+import { getOriginFromRequest, resetEmailConfiguration, sendCashierInvitationEmail } from "@/lib/recovery-email";
 
-export const POST = route({ permission: "team.manage" }, async ({ auth, params }) => {
+export const POST = route({ permission: "team.manage" }, async ({ req, auth, params }) => {
   const id = parseId(params.id);
   const biz = auth.business.id;
 
@@ -28,9 +28,10 @@ export const POST = route({ permission: "team.manage" }, async ({ auth, params }
     throw new HttpError(403, "Managers can only resend invitations to cashiers.");
   }
 
-  const emailConfig = resetEmailConfiguration();
+  const origin = getOriginFromRequest(req);
+  const emailConfig = resetEmailConfiguration(origin);
   const token = await createActivationToken(target.userId);
-  const activationLink = `${emailConfig?.origin || process.env.APP_URL || "http://localhost:3000"}/activate?token=${encodeURIComponent(token)}`;
+  const activationLink = `${emailConfig?.origin || origin}/activate?token=${encodeURIComponent(token)}`;
 
   let emailSent = false;
   let emailError: string | undefined;

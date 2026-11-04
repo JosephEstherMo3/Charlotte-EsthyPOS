@@ -25,7 +25,7 @@ import {
   getAuth,
 } from "@/lib/auth";
 import { DUMMY_HASH, hashPassword, hashToken, newToken, verifyPassword } from "@/lib/password";
-import { resetEmailConfiguration, sendResetEmail, sendVerificationEmail } from "@/lib/recovery-email";
+import { getOriginFromRequest, resetEmailConfiguration, sendResetEmail, sendVerificationEmail } from "@/lib/recovery-email";
 import { emailField, passwordField } from "@/lib/validation";
 
 const registerSchema = z.object({
@@ -144,7 +144,7 @@ async function verifyEmail(token: string) {
 
 async function forgot(req: NextRequest) {
   const input = await readJson(req, z.object({ email: emailField }));
-  const config = resetEmailConfiguration();
+  const config = resetEmailConfiguration(getOriginFromRequest(req));
   if (!config) {
     throw new HttpError(503, "Email password recovery is not configured on this server. Sign in with your existing password, or ask the server operator to reset your account securely.");
   }
@@ -220,7 +220,7 @@ export const POST = publicRoute(async ({ req, params }) => {
     }
     case "resend-verification": {
       const input = await readJson(req, z.object({ email: emailField }));
-      const config = resetEmailConfiguration();
+      const config = resetEmailConfiguration(getOriginFromRequest(req));
       if (!config) {
         throw new HttpError(503, "Email delivery is not configured on this server.");
       }

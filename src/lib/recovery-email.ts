@@ -124,6 +124,10 @@ export async function sendVerificationEmail(
         template_id: config.templateId,
         user_id: config.publicKey,
         template_params: {
+          from_name: `${businessName || "Charlotte Esthy POS"} Administration`,
+          sender_name: `${businessName || "Charlotte Esthy POS"} Administration`,
+          from_email: "admin@charlotteesthy.com",
+          reply_to: "charlotteesthy49@gmail.com",
           to_name: fullName || "Valued User",
           name: fullName || "Valued User",
           user_name: fullName || "Valued User",
@@ -217,7 +221,20 @@ export async function sendCashierInvitationEmail(
 ): Promise<EmailResult> {
   const loginUrl = `${config.origin}/login?email=${encodeURIComponent(email)}`;
   const link = defaultPassword ? loginUrl : `${config.origin}/activate?token=${encodeURIComponent(token)}`;
-  const roleDisplay = role === "cashier" ? "Cashier" : role === "manager" ? "Store Manager" : "Staff Member";
+  const isOwner = role === "owner";
+  const isManager = role === "manager";
+  const roleDisplay = isOwner ? "Administrator" : isManager ? "Store Manager" : "Cashier";
+  const fromName = isOwner
+    ? "Charlotte Esthy Admin"
+    : isManager
+    ? "Charlotte Esthy Manager"
+    : `${businessName || "Charlotte Esthy"} Team`;
+  const fromEmail = isOwner
+    ? "admin@charlotteesthy.com"
+    : isManager
+    ? "manager@charlotteesthy.com"
+    : "cashier@charlotteesthy.com";
+  const replyTo = "charlotteesthy49@gmail.com";
 
   if (config.provider === "emailjs") {
     try {
@@ -226,6 +243,11 @@ export async function sendCashierInvitationEmail(
         template_id: config.templateId,
         user_id: config.publicKey,
         template_params: {
+          from_name: fromName,
+          sender_name: fromName,
+          from_email: fromEmail,
+          sender_email: fromEmail,
+          reply_to: replyTo,
           to_name: fullName || "Staff Member",
           name: fullName || "Staff Member",
           user_name: fullName || "Staff Member",
@@ -245,7 +267,7 @@ export async function sendCashierInvitationEmail(
           logo_url: "https://raw.githubusercontent.com/JosephEstherMo3/Charlotte-EsthyPOS/main/public/logo.png",
           support_email: "charlotteesthy49@gmail.com",
           app_url: config.origin,
-          subject: `You have been added to ${businessName} as ${roleDisplay}`,
+          subject: `Official Notification: You have been added to ${businessName} as ${roleDisplay}`,
         },
       };
       if (config.privateKey) {
@@ -332,6 +354,10 @@ export async function sendResetEmail(
         template_id: config.resetTemplateId,
         user_id: config.publicKey,
         template_params: {
+          from_name: "Charlotte Esthy Security",
+          sender_name: "Charlotte Esthy Security",
+          from_email: "security@charlotteesthy.com",
+          reply_to: "charlotteesthy49@gmail.com",
           to_email: email,
           user_email: email,
           email,

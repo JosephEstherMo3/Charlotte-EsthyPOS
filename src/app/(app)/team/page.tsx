@@ -77,6 +77,17 @@ function AddMember({
   const [copiedPassword, setCopiedPassword] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  function formatRoleEmail(name: string, role: Role) {
+    const clean = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s]/g, "")
+      .replace(/\s+/g, ".");
+    const prefix = clean || "staff";
+    const roleSlug = role === "owner" ? "admin" : role === "manager" ? "manager" : "cashier";
+    return `${prefix}.${roleSlug}@charlotteesthy.com`;
+  }
+
   function generateDefaultPassword() {
     const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const special = "@#$%&*!";
@@ -255,18 +266,47 @@ function AddMember({
           required
           autoFocus
         />
-        <TextField
-          label="Email address"
-          type="email"
-          value={v.email}
-          onChange={(e) => setV({ ...v, email: e.target.value })}
-          error={fields.email}
-          required
-        />
+        <div>
+          <TextField
+            label="Email address"
+            type="email"
+            value={v.email}
+            onChange={(e) => setV({ ...v, email: e.target.value })}
+            error={fields.email}
+            placeholder={`e.g. ${v.fullName ? formatRoleEmail(v.fullName, v.role) : `staff.${v.role === "owner" ? "admin" : v.role === "manager" ? "manager" : "cashier"}@charlotteesthy.com`}`}
+            hint="Sign-in email address. Enter a personal email or generate an official store email."
+            required
+          />
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                const generated = formatRoleEmail(v.fullName, v.role);
+                setV((prev) => ({ ...prev, email: generated }));
+                toast.info(`Generated store email: ${generated}`);
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0c4a9e] hover:text-[#093a7d] hover:underline"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+              Generate official {v.role === "owner" ? ".admin" : v.role === "manager" ? ".manager" : ".cashier"} email
+            </button>
+          </div>
+        </div>
+
         <SelectField
           label="Store role"
           value={v.role}
-          onChange={(e) => setV({ ...v, role: e.target.value as Role })}
+          onChange={(e) => {
+            const newRole = e.target.value as Role;
+            setV((prev) => {
+              const isStoreEmail = prev.email.endsWith("@charlotteesthy.com");
+              return {
+                ...prev,
+                role: newRole,
+                email: isStoreEmail || !prev.email ? formatRoleEmail(prev.fullName, newRole) : prev.email,
+              };
+            });
+          }}
           hint={ROLE_DESCRIPTIONS[v.role]}
         >
           {allowedRoles.map((r) => (
@@ -316,10 +356,11 @@ function AddMember({
         <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-900 leading-relaxed">
           <p className="font-semibold flex items-center gap-1.5">
             <Mail className="h-3.5 w-3.5 text-blue-600" />
-            Automatic Email Notification
+            Official Notification Sender
           </p>
           <p className="mt-1 text-blue-800">
-            A welcome notification will be delivered to <strong>{v.email || "their email address"}</strong> informing them of their new account.
+            Sender: <strong>{v.role === "owner" ? "Charlotte Esthy Admin" : v.role === "manager" ? "Charlotte Esthy Manager" : "Charlotte Esthy Team"}</strong>.
+            Delivery destination: <strong>{v.email || "their email address"}</strong>.
           </p>
         </div>
       </div>

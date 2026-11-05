@@ -5,8 +5,10 @@ import {
   authHandoffs,
   emailVerifications,
   embeddedSessions,
+  inventoryMovements,
   memberships,
   passwordResets,
+  refunds,
   sales,
   sessions,
   users,
@@ -65,7 +67,13 @@ export const PATCH = route({ permission: "team.manage" }, async ({ req, auth, pa
     if (Object.keys(set).length) await tx.update(memberships).set(set).where(eq(memberships.id, id));
 
     if (input.password) {
-      await tx.update(users).set({ passwordHash: await hashPassword(input.password) }).where(eq(users.id, target.m.userId));
+      await tx
+        .update(users)
+        .set({
+          passwordHash: await hashPassword(input.password),
+          emailVerifiedAt: new Date(),
+        })
+        .where(eq(users.id, target.m.userId));
     }
     if (input.password || input.status === "disabled") {
       await tx.delete(sessions).where(eq(sessions.userId, target.m.userId)); // force sign-out
@@ -93,8 +101,7 @@ export const DELETE = route({ permission: "team.manage" }, async ({ auth, params
       .select({ m: memberships, email: users.email })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      .where(and(eq(memberships.id, id), eq(memberships.businessId, biz)))
-      .for("update", { of: memberships });
+      .where(and(eq(memberships.id, id), eq(memberships.businessId, biz)));
 
     if (!target) throw new HttpError(404, "Team member not found");
 
@@ -114,20 +121,6 @@ export const DELETE = route({ permission: "team.manage" }, async ({ auth, params
       if (n <= 1) throw new HttpError(400, "A business must keep at least one active owner.");
     }
 
-    // Integrity check: Did this cashier record sales?
-    const [saleRecord] = await tx
-      .select({ id: sales.id })
-      .from(sales)
-      .where(eq(sales.cashierId, target.m.userId))
-      .limit(1);
-
-    if (saleRecord) {
-      throw new HttpError(
-        400,
-        "This member has recorded sales and cannot be deleted due to financial and transaction history. Please set their status to 'Disabled' instead to revoke access.",
-      );
-    }
-
     // Revoke any active sessions & pending tokens
     await tx.delete(sessions).where(eq(sessions.userId, target.m.userId));
     await tx.delete(embeddedSessions).where(eq(embeddedSessions.userId, target.m.userId));
@@ -138,7 +131,7 @@ export const DELETE = route({ permission: "team.manage" }, async ({ auth, params
     // Delete membership from this business
     await tx.delete(memberships).where(eq(memberships.id, id));
 
-    // If the user does not belong to any other businesses, delete user record entirely
+    // Check if user belongs to any other businesses
     const [otherMembership] = await tx
       .select({ id: memberships.id })
       .from(memberships)
@@ -146,7 +139,31 @@ export const DELETE = route({ permission: "team.manage" }, async ({ auth, params
       .limit(1);
 
     if (!otherMembership) {
-      await tx.delete(users).where(eq(users.id, target.m.userId));
+      // Check if user has historical records (sales, refunds, stock movements)
+      const [saleRecord] = await tx
+        .select({ id: sales.id })
+        .from(sales)
+        .where(eq(sales.cashierId, target.m.userId))
+        .limit(1);
+
+      const [refundRecord] = await tx
+        .select({ id: refunds.id })
+        .from(refunds)
+        .where(eq(refunds.createdBy, target.m.userId))
+        .limit(1);
+
+      const [movementRecord] = await tx
+        .select({ id: inventoryMovements.id })
+        .from(inventoryMovements)
+        .where(eq(inventoryMovements.userId, target.m.userId))
+        .limit(1);
+
+      if (!saleRecord && !refundRecord && !movementRecord) {
+        await tx.delete(users).where(eq(users.id, target.m.userId));
+      } else {
+        // Invalidate login while preserving cashier identity for past receipts/records
+        await tx.update(users).set({ passwordHash: `account_removed_by_admin_${Date.now()}` }).where(eq(users.id, target.m.userId));
+      }
     }
 
     await audit(tx, {

@@ -1,11 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy, KeyRound, Mail, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, KeyRound, Mail, Pencil, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useApp } from "@/components/app-context";
-import { Alert, Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, ErrorState, Modal, PageHeader, SelectField, Skeleton, TextField, useToast } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Modal,
+  PageHeader,
+  SelectField,
+  Skeleton,
+  TextField,
+  useToast,
+} from "@/components/ui";
 import { ApiError, apiFetch, useApi } from "@/lib/client";
-import { PERMISSION_LABELS, PERMISSIONS, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_PERMISSIONS, type Role } from "@/lib/permissions";
+import {
+  PERMISSION_LABELS,
+  PERMISSIONS,
+  ROLE_DESCRIPTIONS,
+  ROLE_LABELS,
+  ROLE_PERMISSIONS,
+  type Role,
+} from "@/lib/permissions";
 
 interface Member {
   id: string;
@@ -24,10 +46,12 @@ interface AddMemberResult {
   email: string;
   fullName: string;
   role: Role;
+  password?: string;
   isRetry: boolean;
   emailSent: boolean;
   emailError?: string;
   activationLink: string;
+  loginLink?: string;
 }
 
 function AddMember({
@@ -46,12 +70,25 @@ function AddMember({
     password: "",
     role: allowedRoles[allowedRoles.length - 1] as Role,
   });
-  const [manualPassword, setManualPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
   const [result, setResult] = useState<AddMemberResult | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  function generateDefaultPassword() {
+    const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const special = "@#$%&*!";
+    let randomPart = "";
+    for (let i = 0; i < 6; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const spec = special.charAt(Math.floor(Math.random() * special.length));
+    const generated = `Esthy${spec}${randomPart}`;
+    setV((prev) => ({ ...prev, password: generated }));
+    toast.info("Generated default password");
+  }
 
   async function save() {
     setBusy(true);
@@ -61,11 +98,9 @@ function AddMember({
       const payload: Record<string, unknown> = {
         fullName: v.fullName,
         email: v.email,
+        password: v.password,
         role: v.role,
       };
-      if (manualPassword && v.password) {
-        payload.password = v.password;
-      }
 
       const res = await apiFetch<AddMemberResult>("/api/team", {
         method: "POST",
@@ -73,13 +108,11 @@ function AddMember({
       });
 
       onSaved();
-
+      setResult(res);
       if (res.emailSent) {
-        toast.success(`Invitation sent to ${res.email}`);
-        onClose();
+        toast.success(`Account created & invitation email sent to ${res.email}`);
       } else {
-        // Keep modal open to display failure & provide copyable activation link
-        setResult(res);
+        toast.success(`Account created for ${res.fullName}`);
       }
     } catch (e) {
       setErr((e as ApiError).message);
@@ -89,11 +122,21 @@ function AddMember({
     }
   }
 
-  const copyLink = () => {
-    if (!result?.activationLink) return;
-    navigator.clipboard.writeText(result.activationLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const copyPassword = () => {
+    const pwd = result?.password || v.password;
+    if (!pwd) return;
+    navigator.clipboard.writeText(pwd);
+    setCopiedPassword(true);
+    toast.success("Password copied to clipboard!");
+    setTimeout(() => setCopiedPassword(false), 2500);
+  };
+
+  const copyLoginLink = () => {
+    const link = result?.loginLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login");
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    toast.success("Login link copied!");
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
   if (result) {
@@ -101,8 +144,8 @@ function AddMember({
       <Modal
         open
         onClose={onClose}
-        title="Staff Account Created"
-        description={`Account for ${result.fullName} (${result.email}) has been provisioned.`}
+        title="Staff Account Created & Activated"
+        description={`Account for ${result.fullName} (${result.email}) has been provisioned and is active.`}
         size="sm"
         footer={
           <Button onClick={onClose} variant="primary">
@@ -111,32 +154,70 @@ function AddMember({
         }
       >
         <div className="space-y-4">
-          <Alert tone="warning">
-            <p className="font-semibold">Invitation Email Notice</p>
-            <p className="mt-1 text-xs leading-relaxed">
-              {result.emailError ||
-                "Email delivery could not be completed. You can copy the secure activation link below and share it with the team member directly."}
-            </p>
-          </Alert>
+          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 border border-slate-200">
+            <div>
+              <p className="text-xs font-semibold text-slate-800">{result.fullName}</p>
+              <p className="text-xs text-slate-500">{result.email}</p>
+            </div>
+            <Badge tone={result.role === "owner" ? "navy" : result.role === "manager" ? "emerald" : "slate"}>
+              {ROLE_LABELS[result.role]}
+            </Badge>
+          </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
-            <p className="text-xs font-semibold text-slate-800">Secure Activation Link</p>
+          <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-blue-900">Default Password</p>
+              <span className="text-[11px] text-blue-700 font-medium">Keep this for admin sign-in</span>
+            </div>
             <div className="flex gap-2">
               <input
                 type="text"
                 readOnly
-                value={result.activationLink}
+                value={result.password || v.password}
+                className="flex-1 rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 text-xs font-mono font-bold text-slate-800 focus:outline-none"
+              />
+              <Button size="sm" variant="secondary" onClick={copyPassword}>
+                {copiedPassword ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{copiedPassword ? "Copied" : "Copy"}</span>
+              </Button>
+            </div>
+            <p className="text-[11px] text-blue-800 leading-relaxed">
+              As admin, you can log in to this account at any time using this default password.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
+            <p className="text-xs font-semibold text-slate-800">Sign-in Link</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={result.loginLink || (typeof window !== "undefined" ? `${window.location.origin}/login` : "/login")}
                 className="flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono text-slate-800 focus:outline-none"
               />
-              <Button size="sm" variant="secondary" onClick={copyLink}>
-                {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                <span>{copied ? "Copied" : "Copy"}</span>
+              <Button size="sm" variant="secondary" onClick={copyLoginLink}>
+                {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{copiedLink ? "Copied" : "Copy"}</span>
               </Button>
             </div>
             <p className="text-[11px] text-slate-500">
-              The cashier can open this link to set their own password and activate their account.
+              The staff member can open this link directly to sign in with their email and password.
             </p>
           </div>
+
+          {result.emailSent ? (
+            <Alert tone="success">
+              <p className="font-semibold text-xs">Notification Email Delivered</p>
+              <p className="mt-0.5 text-xs">A welcome notification was sent to {result.email}.</p>
+            </Alert>
+          ) : (
+            <Alert tone="warning">
+              <p className="font-semibold text-xs">Email Delivery Notice</p>
+              <p className="mt-0.5 text-xs">
+                {result.emailError || "Email could not be delivered. Please share the credentials above directly with the staff member."}
+              </p>
+            </Alert>
+          )}
         </div>
       </Modal>
     );
@@ -147,7 +228,7 @@ function AddMember({
       open
       onClose={() => !busy && onClose()}
       title="Add team member"
-      description="Invite a cashier or manager to your store. They will choose their own password via email."
+      description="Create a cashier or manager account and set their default password."
       size="sm"
       footer={
         <>
@@ -157,9 +238,9 @@ function AddMember({
           <Button
             onClick={save}
             loading={busy}
-            disabled={!v.fullName.trim() || !v.email.trim() || (manualPassword && v.password.length < 8)}
+            disabled={!v.fullName.trim() || !v.email.trim() || v.password.length < 8}
           >
-            Send invitation
+            Create member
           </Button>
         </>
       }
@@ -195,41 +276,52 @@ function AddMember({
           ))}
         </SelectField>
 
-        <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-900 leading-relaxed">
-          <p className="font-semibold flex items-center gap-1.5">
-            <Mail className="h-3.5 w-3.5 text-blue-600" />
-            Automatic Email Invitation
-          </p>
-          <p className="mt-1 text-blue-800">
-            A secure activation link will be sent to <strong>{v.email || "their email address"}</strong> so they can
-            create their password safely without plain-text sharing.
-          </p>
-        </div>
-
-        <div className="pt-1">
-          <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600">
-            <input
-              type="checkbox"
-              checked={manualPassword}
-              onChange={(e) => setManualPassword(e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span>Set temporary password manually instead</span>
-          </label>
-        </div>
-
-        {manualPassword && (
+        <div>
           <TextField
-            label="Temporary password"
+            label="Default password"
             type="text"
             autoComplete="off"
             value={v.password}
             onChange={(e) => setV({ ...v, password: e.target.value })}
             error={fields.password}
-            hint="At least 8 characters. Must be communicated securely."
+            placeholder="e.g. Esthy@9x4k2"
+            hint="Set the default password for this staff member (min 8 characters). Admin can use this to sign in."
             required
           />
-        )}
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={generateDefaultPassword}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0c4a9e] hover:text-[#093a7d] hover:underline"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+              Generate default password
+            </button>
+            {v.password && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(v.password);
+                  toast.success("Password copied to clipboard!");
+                }}
+                className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-900 leading-relaxed">
+          <p className="font-semibold flex items-center gap-1.5">
+            <Mail className="h-3.5 w-3.5 text-blue-600" />
+            Automatic Email Notification
+          </p>
+          <p className="mt-1 text-blue-800">
+            A welcome notification will be delivered to <strong>{v.email || "their email address"}</strong> informing them of their new account.
+          </p>
+        </div>
       </div>
     </Modal>
   );
@@ -240,11 +332,13 @@ function EditMember({
   allowedRoles,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   member: Member;
   allowedRoles: Role[];
   onClose: () => void;
   onSaved: () => void;
+  onDeleted?: (memberId: string) => void;
 }) {
   const toast = useToast();
   const [role, setRole] = useState<Role>(member.role);
@@ -252,8 +346,22 @@ function EditMember({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [deleteErr, setDeleteErr] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  function generateNewPassword() {
+    const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const special = "@#$%&*!";
+    let randomPart = "";
+    for (let i = 0; i < 6; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const spec = special.charAt(Math.floor(Math.random() * special.length));
+    const generated = `Esthy${spec}${randomPart}`;
+    setPassword(generated);
+    toast.info("Generated new password");
+  }
 
   async function save() {
     setBusy(true);
@@ -264,11 +372,11 @@ function EditMember({
     if (password) body.password = password;
     try {
       await apiFetch(`/api/team/${member.id}`, { method: "PATCH", body });
-      toast.success("Team member updated");
+      toast.success("Team member updated successfully");
       onSaved();
       onClose();
-    } catch (e) {
-      setErr((e as Error).message);
+    } catch (e: any) {
+      setErr(e.message || "Failed to update member");
     } finally {
       setBusy(false);
     }
@@ -276,15 +384,17 @@ function EditMember({
 
   async function deleteMember() {
     setDeleting(true);
-    setErr("");
+    setDeleteErr("");
     try {
       await apiFetch(`/api/team/${member.id}`, { method: "DELETE" });
-      toast.success("Team member deleted successfully");
+      toast.success(`${member.fullName} was deleted from the team.`);
+      onDeleted?.(member.id);
       onSaved();
       onClose();
-    } catch (e) {
-      setErr((e as Error).message);
-      setConfirmDelete(false);
+    } catch (e: any) {
+      const msg = e.message || "Failed to delete team member.";
+      setDeleteErr(msg);
+      toast.error(msg);
     } finally {
       setDeleting(false);
     }
@@ -339,25 +449,53 @@ function EditMember({
           <option value="active">Active</option>
           <option value="disabled">Disabled</option>
         </SelectField>
+
         {!member.isYou && (
           <>
-            <TextField
-              label="Set new password (optional)"
-              type="text"
-              autoComplete="off"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              hint="Signs them out of all devices and forces them to sign in again."
-            />
+            <div>
+              <TextField
+                label="Set new password (optional)"
+                type="text"
+                autoComplete="off"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="e.g. Esthy@9x4k2"
+                hint="Changes password immediately and signs them out of all devices. Min 8 characters."
+              />
+              <div className="mt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={generateNewPassword}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0c4a9e] hover:text-[#093a7d] hover:underline"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  Generate new password
+                </button>
+                {password && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(password);
+                      toast.success("Password copied to clipboard!");
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div className="pt-4 border-t border-slate-200">
               {confirmDelete ? (
-                <div className="rounded-xl border border-red-200 bg-red-50/60 p-3.5 space-y-3">
+                <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 space-y-3">
+                  {deleteErr && <Alert tone="error">{deleteErr}</Alert>}
                   <p className="text-xs font-semibold text-red-900">
                     Are you sure you want to delete {member.fullName}?
                   </p>
                   <p className="text-xs text-red-700 leading-relaxed">
-                    This will permanently remove this account from your store. If they have no recorded transactions, their profile will be completely erased.
+                    This will permanently remove this account from your store. They will no longer be able to sign in.
                   </p>
                   <div className="flex gap-2 pt-1">
                     <Button
@@ -372,7 +510,10 @@ function EditMember({
                       variant="secondary"
                       size="sm"
                       disabled={deleting}
-                      onClick={() => setConfirmDelete(false)}
+                      onClick={() => {
+                        setConfirmDelete(false);
+                        setDeleteErr("");
+                      }}
                     >
                       Cancel
                     </Button>
@@ -387,7 +528,10 @@ function EditMember({
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => setConfirmDelete(true)}
+                    onClick={() => {
+                      setConfirmDelete(true);
+                      setDeleteErr("");
+                    }}
                     disabled={busy || deleting}
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1.5 inline" />
@@ -406,6 +550,7 @@ function EditMember({
 export default function TeamPage() {
   const app = useApp();
   const { data, error, reload } = useApi<{ members: Member[] }>("/api/team");
+  const [localMembers, setLocalMembers] = useState<Member[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -420,16 +565,26 @@ export default function TeamPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const toast = useToast();
 
+  useEffect(() => {
+    if (data?.members) {
+      setLocalMembers(data.members);
+    }
+  }, [data?.members]);
+
+  const members = localMembers ?? data?.members ?? [];
+
   const isOwner = app.role === "owner";
   const allowedRoles: Role[] = isOwner ? ["owner", "manager", "cashier"] : ["cashier"];
   const canManage = (m: Member) => app.can("team.manage") && (isOwner || m.role === "cashier");
 
   const handleDeleteMember = async () => {
     if (!deletingMember) return;
+    const target = deletingMember;
     setIsDeleting(true);
     try {
-      await apiFetch(`/api/team/${deletingMember.id}`, { method: "DELETE" });
-      toast.success(`${deletingMember.fullName} was deleted from the team.`);
+      await apiFetch(`/api/team/${target.id}`, { method: "DELETE" });
+      setLocalMembers((prev) => (prev ? prev.filter((m) => m.id !== target.id) : []));
+      toast.success(`${target.fullName} was deleted from the team.`);
       setDeletingMember(null);
       reload();
     } catch (e: any) {
@@ -505,11 +660,11 @@ export default function TeamPage() {
               <Skeleton key={i} className="h-14" />
             ))}
           </div>
-        ) : data.members.length === 0 ? (
+        ) : members.length === 0 ? (
           <EmptyState title="No team members" />
         ) : (
           <ul className="divide-y divide-slate-100">
-            {data.members.map((m) => (
+            {members.map((m) => (
               <li key={m.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white">
                   {m.fullName
@@ -645,6 +800,9 @@ export default function TeamPage() {
           allowedRoles={allowedRoles}
           onClose={() => setEditing(null)}
           onSaved={reload}
+          onDeleted={(id) => {
+            setLocalMembers((prev) => (prev ? prev.filter((m) => m.id !== id) : []));
+          }}
         />
       )}
 

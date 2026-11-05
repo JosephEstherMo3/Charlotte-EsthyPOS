@@ -213,8 +213,10 @@ export async function sendCashierInvitationEmail(
   fullName: string,
   businessName: string,
   role: string,
+  defaultPassword?: string,
 ): Promise<EmailResult> {
-  const link = `${config.origin}/activate?token=${encodeURIComponent(token)}`;
+  const loginUrl = `${config.origin}/login?email=${encodeURIComponent(email)}`;
+  const link = defaultPassword ? loginUrl : `${config.origin}/activate?token=${encodeURIComponent(token)}`;
   const roleDisplay = role === "cashier" ? "Cashier" : role === "manager" ? "Store Manager" : "Staff Member";
 
   if (config.provider === "emailjs") {
@@ -230,8 +232,11 @@ export async function sendCashierInvitationEmail(
           to_email: email,
           user_email: email,
           email,
+          default_password: defaultPassword || "",
+          password: defaultPassword || "",
           activation_link: link,
           verification_link: link,
+          login_link: loginUrl,
           link,
           token,
           business_name: businessName || "Charlotte Esthy POS",
@@ -240,7 +245,7 @@ export async function sendCashierInvitationEmail(
           logo_url: "https://raw.githubusercontent.com/JosephEstherMo3/Charlotte-EsthyPOS/main/public/logo.png",
           support_email: "charlotteesthy49@gmail.com",
           app_url: config.origin,
-          subject: `You have been invited to join ${businessName} as ${roleDisplay}`,
+          subject: `You have been added to ${businessName} as ${roleDisplay}`,
         },
       };
       if (config.privateKey) {

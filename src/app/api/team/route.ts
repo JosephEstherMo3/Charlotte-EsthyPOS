@@ -43,7 +43,7 @@ export const GET = route({ permission: "team.view" }, async ({ auth }) => {
 const schema = z.object({
   fullName: z.string().trim().min(2, "Enter the member's full name").max(100),
   email: emailField,
-  password: z.string().min(8, "Password must be at least 8 characters").max(128).optional(),
+  password: z.string().min(8, "Default password must be at least 8 characters").max(128),
   role: z.enum(["owner", "manager", "cashier"]).default("cashier"),
 });
 
@@ -77,16 +77,28 @@ export const POST = route({ permission: "team.manage" }, async ({ req, auth }) =
       .where(and(eq(memberships.businessId, auth.business.id), eq(memberships.userId, existingUser.id)));
 
     if (existingMember) {
-      if (existingUser.emailVerifiedAt) {
+      if (existingMember.status === "disabled") {
+        await db.update(memberships).set({ status: "active", role: input.role }).where(eq(memberships.id, existingMember.id));
+        if (input.password) {
+          await db.update(users).set({ passwordHash: await hashPassword(input.password), emailVerifiedAt: new Date() }).where(eq(users.id, existingUser.id));
+        }
+        memberId = existingMember.id;
+      } else if (!existingUser.emailVerifiedAt) {
+        isRetry = true;
+        if (input.password) {
+          await db.update(users).set({ passwordHash: await hashPassword(input.password), emailVerifiedAt: new Date() }).where(eq(users.id, existingUser.id));
+        }
+        memberId = existingMember.id;
+      } else {
         throw new HttpError(409, "A team member with this email address already exists and is active.", {
           email: "A team member with this email address already exists.",
         });
       }
-      // If the user was added earlier but not activated yet, prevent duplicate error and resend!
-      isRetry = true;
-      memberId = existingMember.id;
     } else {
       // User exists in system, attach to this business
+      if (input.password) {
+        await db.update(users).set({ passwordHash: await hashPassword(input.password), emailVerifiedAt: new Date() }).where(eq(users.id, existingUser.id));
+      }
       const [m] = await db
         .insert(memberships)
         .values({ businessId: auth.business.id, userId: existingUser.id, role: input.role })
@@ -148,6 +160,7 @@ export const POST = route({ permission: "team.manage" }, async ({ req, auth }) =
       input.fullName,
       auth.business.name,
       input.role,
+      input.password,
     );
     emailSent = res.ok;
     emailError = res.error;
@@ -155,16 +168,20 @@ export const POST = route({ permission: "team.manage" }, async ({ req, auth }) =
     emailError = "No email provider (EmailJS/Resend) configured in environment.";
   }
 
+  const loginLink = `${emailConfig?.origin || origin}/login?email=${encodeURIComponent(normalizedEmail)}`;
+
   return Response.json(
     {
       id: memberId,
       email: normalizedEmail,
       fullName: input.fullName,
       role: input.role,
+      password: input.password,
       isRetry,
       emailSent,
       emailError,
       activationLink,
+      loginLink,
     },
     { status: isRetry ? 200 : 201 },
   );

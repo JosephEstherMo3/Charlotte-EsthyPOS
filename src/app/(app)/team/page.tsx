@@ -92,13 +92,14 @@ function AddMember({
     const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const special = "@#$%&*!";
     let randomPart = "";
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     const spec = special.charAt(Math.floor(Math.random() * special.length));
-    const generated = `Esthy${spec}${randomPart}`;
+    const rolePrefix = v.role === "cashier" ? "Cashier" : v.role === "manager" ? "Manager" : "Admin";
+    const generated = `${rolePrefix}${spec}${randomPart}`;
     setV((prev) => ({ ...prev, password: generated }));
-    toast.info("Generated default password");
+    toast.info(`Generated default ${rolePrefix.toLowerCase()} password`);
   }
 
   async function save() {
@@ -324,7 +325,7 @@ function AddMember({
             value={v.password}
             onChange={(e) => setV({ ...v, password: e.target.value })}
             error={fields.password}
-            placeholder="e.g. Esthy@9x4k2"
+            placeholder={`e.g. ${v.role === "cashier" ? "Cashier" : v.role === "manager" ? "Manager" : "Admin"}@9x4k2`}
             hint="Set the default password for this staff member (min 8 characters). Admin can use this to sign in."
             required
           />
@@ -395,13 +396,14 @@ function EditMember({
     const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const special = "@#$%&*!";
     let randomPart = "";
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     const spec = special.charAt(Math.floor(Math.random() * special.length));
-    const generated = `Esthy${spec}${randomPart}`;
+    const rolePrefix = role === "cashier" ? "Cashier" : role === "manager" ? "Manager" : "Admin";
+    const generated = `${rolePrefix}${spec}${randomPart}`;
     setPassword(generated);
-    toast.info("Generated new password");
+    toast.info(`Generated new ${rolePrefix.toLowerCase()} password`);
   }
 
   async function save() {
@@ -500,7 +502,7 @@ function EditMember({
                 autoComplete="off"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="e.g. Esthy@9x4k2"
+                placeholder={`e.g. ${role === "cashier" ? "Cashier" : role === "manager" ? "Manager" : "Admin"}@9x4k2`}
                 hint="Changes password immediately and signs them out of all devices. Min 8 characters."
               />
               <div className="mt-2 flex items-center justify-between">

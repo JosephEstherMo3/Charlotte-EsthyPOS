@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to {{business_name}}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container -->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 540px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);">
+          
+          <!-- Header / Logo -->
+          <tr>
+            <td align="center" style="padding: 36px 32px 24px 32px; border-bottom: 1px solid #f1f5f9;">
+              <img src="https://raw.githubusercontent.com/JosephEstherMo3/Charlotte-EsthyPOS/main/public/logo.png" alt="Charlotte Esthy POS" width="140" style="display: block; border: 0; outline: none; text-decoration: none;" />
+            </td>
+          </tr>
+
+          <!-- Body Content -->
+          <tr>
+            <td style="padding: 32px;">
+              <h1 style="margin: 0 0 12px 0; color: #0a132c; font-size: 22px; font-weight: 700; line-height: 1.3;">
+                Welcome to {{business_name}}!
+              </h1>
+              
+              <p style="margin: 0 0 20px 0; color: #475569; font-size: 14px; line-height: 1.6;">
+                Hello <strong>{{to_name}}</strong>,
+              </p>
+              
+              <p style="margin: 0 0 24px 0; color: #475569; font-size: 14px; line-height: 1.6;">
+                Your staff account has been created on <strong>Charlotte Esthy POS</strong> with the role of <strong style="color: #0c4a9e;">{{role}}</strong>. Your store administrator has set up your login credentials below.
+              </p>
+
+              <!-- Credentials Card -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 28px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <p style="margin: 0 0 12px 0; color: #0f172a; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                      Your Login Details
+                    </p>
+                    
+                    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td width="35%" style="padding: 6px 0; color: #64748b; font-size: 13px;">Login Email:</td>
+                        <td style="padding: 6px 0; color: #0f172a; font-size: 13px; font-weight: 600; font-family: monospace;">{{to_email}}</td>
+                      </tr>
+                      <tr>
+                        <td width="35%" style="padding: 6px 0; color: #64748b; font-size: 13px;">Default Password:</td>
+                        <td style="padding: 6px 0; color: #0c4a9e; font-size: 14px; font-weight: 700; font-family: monospace; letter-spacing: 0.5px;">{{default_password}}</td>
+                      </tr>
+                      <tr>
+                        <td width="35%" style="padding: 6px 0; color: #64748b; font-size: 13px;">Assigned Role:</td>
+                        <td style="padding: 6px 0; color: #0f172a; font-size: 13px; font-weight: 600;">{{role}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Action Button -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{login_link}}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #0c4a9e 0%, #0284c7 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 14px 32px; border-radius: 10px; box-shadow: 0 4px 12px rgba(12, 74, 158, 0.25);">
+                      Sign in to Store &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0 0 16px 0; color: #64748b; font-size: 12px; line-height: 1.5; text-align: center;">
+                If the button above does not work, copy and paste this link into your browser:<br />
+                <a href="{{login_link}}" style="color: #0c4a9e; word-break: break-all; text-decoration: underline;">{{login_link}}</a>
+              </p>
+
+              <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+
+              <p style="margin: 0; color: #94a3b8; font-size: 11px; line-height: 1.5;">
+                <strong>Security Notice:</strong> Please keep your credentials secure. For any assistance, please contact your store administrator at <a href="mailto:{{support_email}}" style="color: #64748b;">{{support_email}}</a>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 32px; background-color: #f8fafc; border-top: 1px solid #f1f5f9; text-align: center;">
+              <p style="margin: 0; color: #94a3b8; font-size: 11px;">
+                &copy; Charlotte Esthy Point of Sale. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

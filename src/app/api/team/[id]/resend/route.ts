@@ -44,6 +44,12 @@ export const POST = route({ permission: "team.manage" }, async ({ req, auth, par
       target.fullName,
       auth.business.name,
       target.role,
+      undefined,
+      {
+        role: auth.role,
+        name: auth.user.fullName,
+        email: auth.user.email,
+      },
     );
     emailSent = res.ok;
     emailError = res.error;

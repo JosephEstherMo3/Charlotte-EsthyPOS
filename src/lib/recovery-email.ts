@@ -218,23 +218,23 @@ export async function sendCashierInvitationEmail(
   businessName: string,
   role: string,
   defaultPassword?: string,
+  addedBy?: {
+    role: "owner" | "manager" | "cashier";
+    name?: string;
+    email?: string;
+  },
 ): Promise<EmailResult> {
   const loginUrl = `${config.origin}/login?email=${encodeURIComponent(email)}`;
   const link = defaultPassword ? loginUrl : `${config.origin}/activate?token=${encodeURIComponent(token)}`;
-  const isOwner = role === "owner";
-  const isManager = role === "manager";
-  const roleDisplay = isOwner ? "Administrator" : isManager ? "Store Manager" : "Cashier";
-  const fromName = isOwner
-    ? "Charlotte Esthy Admin"
-    : isManager
-    ? "Charlotte Esthy Manager"
-    : `${businessName || "Charlotte Esthy"} Team`;
-  const fromEmail = isOwner
-    ? "admin@charlotteesthy.com"
-    : isManager
-    ? "manager@charlotteesthy.com"
-    : "cashier@charlotteesthy.com";
-  const replyTo = "charlotteesthy49@gmail.com";
+  
+  // Who added the member (Administrator or Store Manager)
+  const isAdderOwner = !addedBy || addedBy.role === "owner";
+  const adderTitle = isAdderOwner ? "Store Administrator" : "Store Manager";
+  const adderEmail = isAdderOwner ? "admin.charlotteesthy49@gmail.com" : "manager.charlotteesthy49@gmail.com";
+  const fromName = isAdderOwner ? "Charlotte Esthy Admin" : `Charlotte Esthy Manager (${addedBy?.name || "Manager"})`;
+  
+  // Role of the new staff member
+  const roleDisplay = role === "owner" ? "Administrator" : role === "manager" ? "Store Manager" : "Cashier";
 
   if (config.provider === "emailjs") {
     try {
@@ -245,9 +245,13 @@ export async function sendCashierInvitationEmail(
         template_params: {
           from_name: fromName,
           sender_name: fromName,
-          from_email: fromEmail,
-          sender_email: fromEmail,
-          reply_to: replyTo,
+          from_email: adderEmail,
+          sender_email: adderEmail,
+          reply_to: adderEmail,
+          support_email: adderEmail,
+          added_by_title: adderTitle,
+          added_by_name: addedBy?.name || adderTitle,
+          added_by_email: adderEmail,
           to_name: fullName || "Staff Member",
           name: fullName || "Staff Member",
           user_name: fullName || "Staff Member",
@@ -265,7 +269,6 @@ export async function sendCashierInvitationEmail(
           company_name: businessName || "Charlotte Esthy POS",
           role: roleDisplay,
           logo_url: "https://raw.githubusercontent.com/JosephEstherMo3/Charlotte-EsthyPOS/main/public/logo.png",
-          support_email: "charlotteesthy49@gmail.com",
           app_url: config.origin,
           subject: `Official Notification: You have been added to ${businessName} as ${roleDisplay}`,
         },

@@ -80,7 +80,14 @@ function drawReceipt(doc: jsPDF, sale: SaleDetail, business: BusinessInfo, layou
   row("TOTAL", money(sale.total), "bold", base + 2.5);
   y += 0.8;
   rule();
-  row("Payment", PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod);
+  const payLabel = PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod;
+  row("Payment", sale.paymentProvider ? `${payLabel} (${sale.paymentProvider})` : payLabel);
+  if (sale.paymentReference) {
+    row("Ref / Session", sale.paymentReference, "normal", base - 1.5);
+  }
+  if (sale.senderName) {
+    row("Sender / Acc", sale.senderName, "normal", base - 1.5);
+  }
   row("Amount paid", money(sale.amountPaid));
   if (Number(sale.changeDue) > 0) row("Change", money(sale.changeDue));
   if (Number(sale.refundedAmount) > 0) row("Refunded", `-${money(sale.refundedAmount)}`, "bold");

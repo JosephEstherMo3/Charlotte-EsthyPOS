@@ -55,6 +55,9 @@ export interface SaleDetail {
   amountPaid: string;
   changeDue: string;
   paymentMethod: "cash" | "transfer" | "card";
+  paymentProvider?: string | null;
+  paymentReference?: string | null;
+  senderName?: string | null;
   refundedAmount: string;
   note: string | null;
   cashierName: string | null;
@@ -98,7 +101,11 @@ export function buildReceiptText(sale: SaleDetail, business: BusinessInfo): stri
   if (Number(sale.discountAmount) > 0) lines.push(`Discount: -${money(sale.discountAmount)}`);
   if (Number(sale.taxAmount) > 0) lines.push(`${business.taxName}: ${money(sale.taxAmount)}`);
   lines.push(`*Total: ${money(sale.total)}*`);
-  lines.push(`Paid by ${PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}`);
+  const methodLabel = PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod;
+  const payDetail = sale.paymentProvider ? `${methodLabel} (${sale.paymentProvider})` : methodLabel;
+  lines.push(`Paid by ${payDetail}`);
+  if (sale.paymentReference) lines.push(`Ref/Session ID: ${sale.paymentReference}`);
+  if (sale.senderName) lines.push(`Sender: ${sale.senderName}`);
   if (business.footer) {
     lines.push("");
     lines.push(business.footer);

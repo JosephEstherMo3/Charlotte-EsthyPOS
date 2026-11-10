@@ -25,6 +25,9 @@ export interface CheckoutInput {
   discountType: DiscountType;
   discountValue: number;
   paymentMethod: "cash" | "transfer" | "card";
+  paymentProvider?: string | null;
+  paymentReference?: string | null;
+  senderName?: string | null;
   amountTendered?: number | null;
   customerId?: string | null;
   note?: string | null;
@@ -159,6 +162,9 @@ export async function createSale(input: CheckoutInput) {
         amountPaid: fromCents(tenderedCents),
         changeDue: fromCents(changeCents),
         paymentMethod: input.paymentMethod,
+        paymentProvider: input.paymentProvider?.trim() || null,
+        paymentReference: input.paymentReference?.trim() || null,
+        senderName: input.senderName?.trim() || null,
         note: input.note?.trim() || null,
         idempotencyKey: input.idempotencyKey,
       })
@@ -185,6 +191,9 @@ export async function createSale(input: CheckoutInput) {
       businessId,
       saleId: sale.id,
       method: input.paymentMethod,
+      provider: input.paymentProvider?.trim() || null,
+      reference: input.paymentReference?.trim() || null,
+      senderName: input.senderName?.trim() || null,
       amount: fromCents(totals.totalCents),
       tendered: fromCents(tenderedCents),
       changeDue: fromCents(changeCents),
@@ -415,6 +424,9 @@ export async function getSaleDetail(
     amountPaid: s.amountPaid,
     changeDue: s.changeDue,
     paymentMethod: s.paymentMethod,
+    paymentProvider: s.paymentProvider,
+    paymentReference: s.paymentReference,
+    senderName: s.senderName,
     refundedAmount: s.refundedAmount,
     note: s.note,
     cashierName: row.cashierName,

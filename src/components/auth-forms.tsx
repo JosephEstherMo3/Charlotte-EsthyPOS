@@ -263,14 +263,16 @@ function LoginForm() {
         <span>{s.loading ? "Signing in…" : "Sign in"}</span>
       </button>
 
-      <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3.5 text-center">
-        <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700">
-          <ShieldCheck className="h-4 w-4 text-blue-600" />
-          <span>Authorized Staff Access Only</span>
-        </div>
-        <p className="mt-1 text-[11px] text-slate-500 leading-normal">
-          Accounts are provisioned by store owners. Contact your administrator or manager for credentials.
+      <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3.5 text-center space-y-1.5">
+        <p className="text-xs text-slate-600">
+          Want to start your own store or boutique?
         </p>
+        <Link
+          href="/register"
+          className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
+        >
+          Create a Store Account &rarr;
+        </Link>
       </div>
     </form>
   );

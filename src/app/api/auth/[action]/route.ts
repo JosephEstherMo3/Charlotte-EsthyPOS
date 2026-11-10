@@ -41,10 +41,10 @@ const registerSchema = z.object({
  * token is emailed to the user before they can log in.
  */
 async function register(req: NextRequest) {
-  if (process.env.ALLOW_PUBLIC_REGISTRATION !== "true") {
+  if (process.env.ALLOW_PUBLIC_REGISTRATION === "false") {
     throw new HttpError(
       403,
-      "Self-registration is closed. Accounts can only be created by an authorized store administrator in Team & Permissions."
+      "Self-registration is temporarily closed. Accounts can only be created by an authorized store administrator in Team & Permissions."
     );
   }
 
@@ -192,7 +192,7 @@ export const GET = publicRoute(async ({ req, params }) => {
     return Response.json(
       {
         resetEmailConfigured: Boolean(resetEmailConfiguration()),
-        allowPublicRegistration: process.env.ALLOW_PUBLIC_REGISTRATION === "true",
+        allowPublicRegistration: process.env.ALLOW_PUBLIC_REGISTRATION !== "false",
       },
       { headers: { "Cache-Control": "no-store" } },
     );

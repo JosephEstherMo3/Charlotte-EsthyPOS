@@ -77,7 +77,16 @@ export function ReceiptView({ sale, business, preview }: { sale: SaleDetail; bus
 
       <hr className="my-2.5 border-dashed border-slate-400" />
       <div className="space-y-0.5 tabular">
-        <div className={row}><span>Payment</span><span>{PAYMENT_LABELS[sale.paymentMethod]}</span></div>
+        <div className={row}>
+          <span>Payment</span>
+          <span>{sale.paymentProvider ? `${PAYMENT_LABELS[sale.paymentMethod]} (${sale.paymentProvider})` : PAYMENT_LABELS[sale.paymentMethod]}</span>
+        </div>
+        {sale.paymentReference && (
+          <div className={row}><span className="text-slate-600">Ref / Session ID</span><span className="font-mono text-[10px] break-all">{sale.paymentReference}</span></div>
+        )}
+        {sale.senderName && (
+          <div className={row}><span className="text-slate-600">Sender / Acc</span><span className="font-medium">{sale.senderName}</span></div>
+        )}
         <div className={row}><span>Amount paid</span><span>{money(sale.amountPaid)}</span></div>
         {Number(sale.changeDue) > 0 && <div className={row}><span>Change</span><span>{money(sale.changeDue)}</span></div>}
         {Number(sale.refundedAmount) > 0 && <div className={`${row} font-semibold text-red-700`}><span>Refunded</span><span>−{money(sale.refundedAmount)}</span></div>}

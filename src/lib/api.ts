@@ -93,6 +93,14 @@ function errorResponse(err: unknown): Response {
   if (pgCode === "23514") {
     return NextResponse.json({ error: "The values provided are not allowed." }, { status: 422 });
   }
+  if (pgCode === "28P01") {
+    console.error("[api] Database authentication failed.");
+    return NextResponse.json({ error: "The database connection is not authorized. Please contact the administrator." }, { status: 503 });
+  }
+  if (pgCode === "ECONNREFUSED" || pgCode === "ENOTFOUND" || pgCode === "ETIMEDOUT") {
+    console.error("[api] Database connection unavailable.");
+    return NextResponse.json({ error: "Database temporarily unavailable. Please try again shortly." }, { status: 503 });
+  }
   // Never leak internals to the client; keep details in server logs only.
   console.error("[api] unhandled error:", err);
   return NextResponse.json({ error: "Something went wrong on our side. Please try again." }, { status: 500 });

@@ -64,11 +64,11 @@ export const GET = route({ permission: "sales.view_own" }, async ({ url, auth })
 
   const cashiers = viewAll
     ? await db
-        .select({ id: users.id, name: users.fullName })
-        .from(memberships)
-        .innerJoin(users, eq(users.id, memberships.userId))
-        .where(eq(memberships.businessId, auth.business.id))
-        .orderBy(users.fullName)
+      .select({ id: users.id, name: users.fullName })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .where(eq(memberships.businessId, auth.business.id))
+      .orderBy(users.fullName)
     : [];
 
   return {

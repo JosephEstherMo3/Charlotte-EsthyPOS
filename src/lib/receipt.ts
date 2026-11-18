@@ -104,8 +104,16 @@ export function buildReceiptText(sale: SaleDetail, business: BusinessInfo): stri
   const methodLabel = PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod;
   const payDetail = sale.paymentProvider ? `${methodLabel} (${sale.paymentProvider})` : methodLabel;
   lines.push(`Paid by ${payDetail}`);
-  if (sale.paymentReference) lines.push(`Ref/Session ID: ${sale.paymentReference}`);
-  if (sale.senderName) lines.push(`Sender: ${sale.senderName}`);
+  if (sale.paymentReference) {
+  lines.push(`Ref/Session ID: ${sale.paymentReference}`);
+} else {
+  lines.push(`Ref/Session ID: —`);
+}
+  if (sale.senderName) {
+  lines.push(`Sender: ${sale.senderName}`);
+} else {
+  lines.push(`Sender: —`);
+}
   if (business.footer) {
     lines.push("");
     lines.push(business.footer);

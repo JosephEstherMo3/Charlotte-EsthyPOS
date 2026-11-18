@@ -84,9 +84,13 @@ function drawReceipt(doc: jsPDF, sale: SaleDetail, business: BusinessInfo, layou
   row("Payment", sale.paymentProvider ? `${payLabel} (${sale.paymentProvider})` : payLabel);
   if (sale.paymentReference) {
     row("Ref / Session", sale.paymentReference, "normal", base - 1.5);
+  } else {
+    row("Ref / Session", "—", "normal", base - 1.5);
   }
   if (sale.senderName) {
     row("Sender / Acc", sale.senderName, "normal", base - 1.5);
+  } else {
+    row("Sender / Acc", "—", "normal", base - 1.5);
   }
   row("Amount paid", money(sale.amountPaid));
   if (Number(sale.changeDue) > 0) row("Change", money(sale.changeDue));

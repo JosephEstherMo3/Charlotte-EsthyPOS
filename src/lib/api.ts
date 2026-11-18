@@ -77,6 +77,7 @@ function errorResponse(err: unknown): Response {
   }
   const e = err as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } };
   const pgCode = e?.cause?.code ?? e?.code;
+  const causeMessage = e?.cause && "message" in e.cause ? e.cause.message : "";
   if (pgCode === "23505") {
     const constraint = e.cause?.constraint ?? e.constraint;
     if (constraint === "products_business_sku_uq") {
@@ -97,9 +98,14 @@ function errorResponse(err: unknown): Response {
     console.error("[api] Database authentication failed.");
     return NextResponse.json({ error: "The database connection is not authorized. Please contact the administrator." }, { status: 503 });
   }
-  if (pgCode === "ECONNREFUSED" || pgCode === "ENOTFOUND" || pgCode === "ETIMEDOUT") {
+  if (
+    pgCode === "ECONNREFUSED" ||
+    pgCode === "ENOTFOUND" ||
+    pgCode === "ETIMEDOUT" ||
+    (pgCode === "XX000" && typeof causeMessage === "string" && /^\(ENOTFOUND\) tenant\/user .+ not found$/.test(causeMessage))
+  ) {
     console.error("[api] Database connection unavailable.");
-    return NextResponse.json({ error: "Database temporarily unavailable. Please try again shortly." }, { status: 503 });
+    return NextResponse.json({ error: "Database connection unavailable or misconfigured. Please contact the administrator." }, { status: 503 });
   }
   // Never leak internals to the client; keep details in server logs only.
   console.error("[api] unhandled error:", err);

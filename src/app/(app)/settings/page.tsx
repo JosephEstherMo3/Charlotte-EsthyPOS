@@ -160,7 +160,7 @@ function BusinessTab({ s, reload }: { s: S; reload: () => void }) {
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50">
                   {logo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
+                     
                     <img src={logo} alt="Business logo preview" className="max-h-full max-w-full object-contain" />
                   ) : <ImagePlus className="h-6 w-6 text-slate-400" aria-hidden />}
                 </div>

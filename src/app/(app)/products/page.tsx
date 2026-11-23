@@ -204,7 +204,7 @@ function ProductForm({ product, categories, canSeeCost, onClose, onSaved }: { pr
           <div className="flex items-center gap-4">
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50">
               {v.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                 
                 <img src={v.imageUrl} alt="Product preview" className="h-full w-full object-cover" />
               ) : (
                 <ImagePlus className="h-6 w-6 text-slate-400" aria-hidden />
@@ -234,7 +234,7 @@ function ProductDetails({ product, canSeeCost, onClose }: { product: Prod; canSe
       <div className="space-y-5">
         {product.imageUrl && (
           <div className="flex justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src={product.imageUrl} alt={product.name} className="max-h-56 max-w-full rounded-xl object-contain" />
           </div>
         )}
@@ -460,7 +460,7 @@ function ProductsInner() {
                             <div className="flex items-center gap-3">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-navy-50 text-sm font-semibold text-navy-400">
                                 {p.imageUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
+                                   
                                   <img src={p.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                                 ) : p.name.slice(0, 1).toUpperCase()}
                               </div>

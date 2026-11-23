@@ -22,3 +22,5 @@ coverage
 
 .vercel
 .env*
+
+node_modules_old/
